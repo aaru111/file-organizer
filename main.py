@@ -1,8 +1,10 @@
 # main.py
 
 import os
-import shutil
 import json
+import shutil
+from tkinter import Tk, messagebox
+from modules.gui import launch_gui  # Import the GUI launcher
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -347,7 +349,18 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        error_handler.handle_error(e, context="Main program execution")
+    root = Tk()
+    root.withdraw()
+    response = messagebox.askyesno("File Organizer", "Do you want to use the GUI version?")
+    root.destroy()
+
+    if response:
+        try:
+            launch_gui()
+        except Exception as e:
+            error_handler.handle_error(e, context="Launching GUI")
+    else:
+        try:
+            main()
+        except Exception as e:
+            error_handler.handle_error(e, context="Main program execution")
