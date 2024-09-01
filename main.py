@@ -3,6 +3,9 @@
 import os
 import shutil
 import json
+import tkinter as tk
+from tkinter import messagebox
+from modules.gui import FileOrganizerGUI
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -227,6 +230,12 @@ def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
+def start_gui():
+    root = tk.Tk()
+    gui = FileOrganizerGUI(root, config)
+    root.mainloop()
+
+
 def main():
     current_directory = os.getcwd()
     organized_files = []
@@ -250,9 +259,7 @@ def main():
             return WordCompleter(available_commands)
 
     # Define a style for the prompt using prompt_toolkit's Style class
-    prompt_style = Style.from_dict({
-        'prompt': 'cyan'
-    })
+    prompt_style = Style.from_dict({'prompt': 'cyan'})
 
     console.clear()
     show_home_screen()
@@ -349,7 +356,12 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        error_handler.handle_error(e, context="Main program execution")
+    choice = input("Do you want to use the GUI or Command Line? (gui/cmd): "
+                   ).strip().lower()
+    if choice == 'gui':
+        start_gui()
+    else:
+        try:
+            main()
+        except Exception as e:
+            error_handler.handle_error(e, context="Main program execution")
