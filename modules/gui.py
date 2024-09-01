@@ -4,7 +4,7 @@ import os
 import json
 import shutil
 from tkinter import Tk, filedialog, messagebox, simpledialog
-from tkinter.ttk import Frame, Button, Label, Treeview, Scrollbar, Style
+from tkinter.ttk import Frame, Button, Treeview, Scrollbar, Style
 from modules.error_handler import error_handler
 from modules.help import get_help_table
 from rich.console import Console
@@ -197,7 +197,7 @@ def update_tree(tree, directory):
 
 
 def launch_gui():
-    global current_directory
+    global current_directory  # Changed to global to access the global variable
 
     root = Tk()
     root.title("File Organizer GUI")
@@ -214,7 +214,7 @@ def launch_gui():
     organized_files = []
 
     def open_directory():
-        nonlocal current_directory
+        global current_directory  # Changed to global to access the global variable
         directory = filedialog.askdirectory(initialdir=current_directory)
         if directory:
             current_directory = directory
