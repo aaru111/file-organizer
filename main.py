@@ -10,6 +10,7 @@ from rich.layout import Layout
 from rich.align import Align
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter, PathCompleter
+from prompt_toolkit.styles import Style
 from modules.help import get_help_table, show_command_help
 from modules.error_handler import error_handler
 
@@ -244,13 +245,17 @@ def main():
         else:
             return WordCompleter(available_commands)
 
+    # Define a style for the prompt using prompt_toolkit's Style class
+    prompt_style = Style.from_dict({'prompt': 'cyan'})
+
     console.clear()
     show_home_screen()
 
     while True:
         try:
             user_input = session.prompt(
-                "\n[cyan]❯ [/cyan]",
+                "\n❯ ",  # Removed rich style and added plain text prompt
+                style=prompt_style,  # Apply the defined style to the prompt
                 completer=get_completer(
                     user_input.split()[0] if 'user_input' in locals() else ''))
             command = user_input.split()
