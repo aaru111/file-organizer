@@ -8,7 +8,7 @@ setup(
     description='A versatile file organization tool with both CLI and GUI interfaces.',
     long_description=open('README.md').read(),  
     long_description_content_type='text/markdown',
-    url='https://github.com/aaru111/file-organizer', 
+    url='https://github.com/aaru111/file-organizer.git', 
     packages=find_packages(include=['modules', 'modules.*']),
     include_package_data=True,
     install_requires=[
