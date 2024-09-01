@@ -223,6 +223,10 @@ def show_blacklist():
         console.print("[yellow]All blacklists are empty.[/yellow]")
 
 
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
 def main():
     current_directory = os.getcwd()
     organized_files = []
@@ -233,7 +237,7 @@ def main():
 
     available_commands = [
         'organize', 'list', 'search', 'cd', 'pwd', 'restore', 'blacklist',
-        'show_blacklist', 'stats', 'exit', 'help'
+        'show_blacklist', 'stats', 'exit', 'help', 'clear'
     ]
     error_handler.set_commands(available_commands)
 
@@ -246,7 +250,9 @@ def main():
             return WordCompleter(available_commands)
 
     # Define a style for the prompt using prompt_toolkit's Style class
-    prompt_style = Style.from_dict({'prompt': 'cyan'})
+    prompt_style = Style.from_dict({
+        'prompt': 'cyan'
+    })
 
     console.clear()
     show_home_screen()
@@ -315,6 +321,8 @@ def main():
                 handle_blacklist(command)
             elif command[0] == 'show_blacklist':
                 show_blacklist()
+            elif command[0] == 'clear':
+                clear_screen()
             elif command[0] == 'exit':
                 console.print(
                     "[cyan]Thank you for using the File Organizer. Goodbye![/cyan]"
