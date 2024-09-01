@@ -1,3 +1,5 @@
+# help.py
+
 from rich.table import Table
 from rich.panel import Panel
 from rich.align import Align
@@ -49,6 +51,11 @@ def get_help_table():
             'usage': 'stats',
             'details': 'Displays the total number of files, directories, and the total size of the current directory.'
         },
+        'clear': {
+            'description': 'Clear the terminal screen',
+            'usage': 'clear',
+            'details': 'Clears the terminal screen for a clean view.'
+        },
         'exit': {
             'description': 'Exit the File Organizer',
             'usage': 'exit',
@@ -83,6 +90,7 @@ def show_command_help(command):
         'blacklist': 'Modifies the blacklist of files or directories to ignore during organization. Use "add" to add an item to the blacklist or "remove" to remove an item from the blacklist.',
         'show_blacklist': 'Displays a list of all files and directories currently in the blacklist.',
         'stats': 'Shows statistics for the current directory, including the total number of files, directories, and the total size.',
+        'clear': 'Clears the terminal screen for a clean view.',
         'exit': 'Closes the File Organizer application.',
         'help': 'Displays help information for all available commands or for a specific command when followed by the command name.'
     }
