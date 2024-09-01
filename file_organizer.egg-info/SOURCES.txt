@@ -1,0 +1,13 @@
+LICENSE
+README.md
+setup.py
+file_organizer.egg-info/PKG-INFO
+file_organizer.egg-info/SOURCES.txt
+file_organizer.egg-info/dependency_links.txt
+file_organizer.egg-info/entry_points.txt
+file_organizer.egg-info/requires.txt
+file_organizer.egg-info/top_level.txt
+modules/__init__.py
+modules/error_handler.py
+modules/gui.py
+modules/help.py
