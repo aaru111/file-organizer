@@ -62,9 +62,17 @@ def move_file(file_path, new_path):
 
 
 def is_blacklisted(file_path, filename):
-    return (filename in config['blacklisted_files']
-            or any(bl in file_path for bl in config['blacklisted_directories'])
-            or get_file_extension(filename) in config['blacklisted_filetypes'])
+    """
+    Check if a file or directory is blacklisted.
+    """
+    file_extension = get_file_extension(filename)
+    is_blacklisted_file = filename in config['blacklisted_files']
+    is_blacklisted_dir = any(
+        os.path.commonpath([bl, file_path]) == bl
+        for bl in config['blacklisted_directories'])
+    is_blacklisted_type = file_extension in config['blacklisted_filetypes']
+
+    return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
 
 
 def organize_files(directory, specific_type=None):
@@ -169,40 +177,48 @@ def get_directory_stats(directory):
 
 
 def handle_blacklist(command):
+    """
+    Handles adding or removing items from the blacklist in batch.
+    """
     if len(command) < 3:
         console.print(
-            "[red]Usage: blacklist [add/remove] [filename/directory/filetype][/red]"
+            "[red]Usage: blacklist [add/remove] [filename, directory, or filetype (comma-separated)][/red]"
         )
         return
 
-    action, item = command[1], command[2]
-    item_type = 'files' if '.' not in item else 'filetypes' if item.startswith(
-        '.') else 'directories'
-    blacklist_key = f'blacklisted_{item_type}'
+    action, items = command[1], command[2]
+    items_list = items.split(",")  # Allow multiple items separated by commas
 
-    if action == 'add':
-        if item not in config[blacklist_key]:
-            config[blacklist_key].append(item)
-            save_config(config)
-            console.print(
-                f"[green]✓ Added '{item}' to blacklisted {item_type}.[/green]")
+    for item in items_list:
+        item = item.strip()  # Remove any extra spaces
+        item_type = ('filetypes' if item.startswith('.') else
+                     'directories' if os.path.isdir(item) else 'files')
+        blacklist_key = f'blacklisted_{item_type}'
+
+        if action == 'add':
+            if item not in config[blacklist_key]:
+                config[blacklist_key].append(item)
+                console.print(
+                    f"[green]✓ Added '{item}' to blacklisted {item_type}.[/green]"
+                )
+            else:
+                console.print(
+                    f"[yellow]'{item}' is already in blacklisted {item_type}.[/yellow]"
+                )
+        elif action == 'remove':
+            if item in config[blacklist_key]:
+                config[blacklist_key].remove(item)
+                console.print(
+                    f"[green]✓ Removed '{item}' from blacklisted {item_type}.[/green]"
+                )
+            else:
+                console.print(
+                    f"[yellow]'{item}' not found in blacklisted {item_type}.[/yellow]"
+                )
         else:
-            console.print(
-                f"[yellow]'{item}' is already in blacklisted {item_type}.[/yellow]"
-            )
-    elif action == 'remove':
-        if item in config[blacklist_key]:
-            config[blacklist_key].remove(item)
-            save_config(config)
-            console.print(
-                f"[green]✓ Removed '{item}' from blacklisted {item_type}.[/green]"
-            )
-        else:
-            console.print(
-                f"[yellow]'{item}' not found in blacklisted {item_type}.[/yellow]"
-            )
-    else:
-        console.print("[red]Invalid action. Use 'add' or 'remove'.[/red]")
+            console.print("[red]Invalid action. Use 'add' or 'remove'.[/red]")
+
+    save_config(config)  # Save the updated config after processing all items
 
 
 def show_blacklist():
@@ -223,6 +239,19 @@ def show_blacklist():
                         expand=False))
     else:
         console.print("[yellow]All blacklists are empty.[/yellow]")
+
+
+def reset_to_default():
+    """
+    Resets the configuration to its default state.
+    """
+    default_config = {
+        "blacklisted_files": [],
+        "blacklisted_directories": [],
+        "blacklisted_filetypes": []
+    }
+    save_config(default_config)
+    console.print("[green]Configuration has been reset to default.[/green]")
 
 
 def clear_screen():
@@ -319,6 +348,10 @@ def main():
                     )
             elif command[0] == 'blacklist':
                 handle_blacklist(command)
+
+            elif command[0] == 'reset':
+                reset_to_default()
+
             elif command[0] == 'show_blacklist':
                 show_blacklist()
             elif command[0] == 'clear':
@@ -351,7 +384,8 @@ def main():
 if __name__ == "__main__":
     root = Tk()
     root.withdraw()
-    response = messagebox.askyesno("File Organizer", "Do you want to use the GUI version?")
+    response = messagebox.askyesno("File Organizer",
+                                   "Do you want to use the GUI version?")
     root.destroy()
 
     if response:

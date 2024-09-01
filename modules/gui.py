@@ -55,9 +55,17 @@ def move_file(file_path, new_path):
 
 
 def is_blacklisted(file_path, filename):
-    return (filename in config['blacklisted_files']
-            or any(bl in file_path for bl in config['blacklisted_directories'])
-            or get_file_extension(filename) in config['blacklisted_filetypes'])
+    """
+    Check if a file or directory is blacklisted.
+    """
+    file_extension = get_file_extension(filename)
+    is_blacklisted_file = filename in config['blacklisted_files']
+    is_blacklisted_dir = any(
+        os.path.commonpath([bl, file_path]) == bl
+        for bl in config['blacklisted_directories'])
+    is_blacklisted_type = file_extension in config['blacklisted_filetypes']
+
+    return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
 
 
 def organize_files(directory, specific_type=None):
@@ -136,30 +144,38 @@ def show_blacklist():
     messagebox.showinfo("Blacklist", blacklist_message)
 
 
-def handle_blacklist(action, item):
-    item_type = 'files' if '.' not in item else 'filetypes' if item.startswith(
-        '.') else 'directories'
-    blacklist_key = f'blacklisted_{item_type}'
+def handle_blacklist(action, items):
+    """
+    Handles adding or removing items from the blacklist in batch.
+    """
+    items_list = items.split(",")  # Allow multiple items separated by commas
+    for item in items_list:
+        item = item.strip()  # Remove any extra spaces
+        item_type = ('filetypes' if item.startswith('.') else
+                     'directories' if os.path.isdir(item) else 'files')
+        blacklist_key = f'blacklisted_{item_type}'
 
-    if action == 'add':
-        if item not in config[blacklist_key]:
-            config[blacklist_key].append(item)
-            save_config(config)
-            messagebox.showinfo("Blacklist",
-                                f"Added '{item}' to blacklisted {item_type}.")
-        else:
-            messagebox.showwarning(
-                "Blacklist",
-                f"'{item}' is already in blacklisted {item_type}.")
-    elif action == 'remove':
-        if item in config[blacklist_key]:
-            config[blacklist_key].remove(item)
-            save_config(config)
-            messagebox.showinfo(
-                "Blacklist", f"Removed '{item}' from blacklisted {item_type}.")
-        else:
-            messagebox.showwarning(
-                "Blacklist", f"'{item}' not found in blacklisted {item_type}.")
+        if action == 'add':
+            if item not in config[blacklist_key]:
+                config[blacklist_key].append(item)
+                messagebox.showinfo(
+                    "Blacklist", f"Added '{item}' to blacklisted {item_type}.")
+            else:
+                messagebox.showwarning(
+                    "Blacklist",
+                    f"'{item}' is already in blacklisted {item_type}.")
+        elif action == 'remove':
+            if item in config[blacklist_key]:
+                config[blacklist_key].remove(item)
+                messagebox.showinfo(
+                    "Blacklist",
+                    f"Removed '{item}' from blacklisted {item_type}.")
+            else:
+                messagebox.showwarning(
+                    "Blacklist",
+                    f"'{item}' not found in blacklisted {item_type}.")
+
+    save_config(config)  # Save the updated config after processing all items
 
 
 def get_directory_stats(directory):
@@ -256,14 +272,30 @@ def launch_gui():
         action = simpledialog.askstring("Blacklist Action",
                                         "Enter action (add/remove):")
         if action in ['add', 'remove']:
-            item = simpledialog.askstring(
-                "Blacklist Item",
-                "Enter filename, directory, or filetype to blacklist:")
-            if item:
-                handle_blacklist(action, item)
+            items = simpledialog.askstring(
+                "Blacklist Items",
+                "Enter filenames, directories, or filetypes to blacklist (comma-separated):"
+            )
+            if items:
+                handle_blacklist(action, items)
         else:
             messagebox.showwarning("Blacklist",
                                    "Invalid action. Use 'add' or 'remove'.")
+
+    def reset_to_default():
+        """
+        Resets the configuration to its default state.
+        """
+        global config
+        default_config = {
+            "blacklisted_files": [],
+            "blacklisted_directories": [],
+            "blacklisted_filetypes": []
+        }
+        save_config(default_config)
+        config = default_config
+        messagebox.showinfo("Reset",
+                            "Configuration has been reset to default.")
 
     def on_show_blacklist():
         show_blacklist()
@@ -288,6 +320,9 @@ def launch_gui():
            command=on_blacklist).pack(side='left', padx=5, pady=5)
     Button(button_frame, text="Show Blacklist",
            command=on_show_blacklist).pack(side='left', padx=5, pady=5)
+    Button(button_frame, text="Reset to Default",
+           command=reset_to_default).pack(side='left', padx=5, pady=5)
+
     Button(button_frame, text="Exit", command=on_exit).pack(side='right',
                                                             padx=5,
                                                             pady=5)
