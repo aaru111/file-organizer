@@ -1,21 +1,6 @@
 # File Organizer
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/downloads/)
-
-A powerful and user-friendly file organization tool with both CLI and GUI interfaces.
-
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [CLI Usage](#cli-usage)
-  - [GUI Usage](#gui-usage)
-- [Commands](#commands)
-- [Configuration](#configuration)
-- [Contributing](#contributing)
-- [License](#license)
+A versatile file organization tool with both CLI and GUI interfaces.
 
 ## Features
 
@@ -37,32 +22,28 @@ A powerful and user-friendly file organization tool with both CLI and GUI interf
 
 2. Install the required dependencies:
    ```
-   pip install -r requirements.txt
+   pip install rich prompt_toolkit
    ```
 
 ## Usage
 
-### CLI Usage
-
-To start the File Organizer in CLI mode, run:
+To start the File Organizer, run:
 
 ```
 python main.py
 ```
+
+You will be prompted to choose between the CLI and GUI versions.
+
+### CLI Usage
+
+The CLI provides an interactive prompt where you can enter commands.
 
 ### GUI Usage
 
-To start the File Organizer in GUI mode, run:
+The GUI provides buttons for common actions and a file tree view.
 
-```
-python main.py
-```
-
-When prompted, choose "Yes" to use the GUI version.
-
-## Commands
-
-Here's a quick overview of available commands in CLI mode:
+## Commands (CLI)
 
 - `organize [directory] [file_type]`: Organize files in the specified directory
 - `list`: List all files and directories in the current location
@@ -77,21 +58,17 @@ Here's a quick overview of available commands in CLI mode:
 - `exit`: Exit the File Organizer
 - `help [command]`: Display help information
 
-For detailed information on each command, use `help <command>` in the CLI.
-
 ## Configuration
 
 The File Organizer uses a configuration file located at `config/config.json`. This file stores the blacklist settings. You can manually edit this file or use the `blacklist` command to modify it.
 
+## Error Handling
+
+The application includes a robust error handling system that provides detailed error information and suggestions for fixing common issues.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## License
 
