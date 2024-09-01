@@ -3,6 +3,7 @@
 import os
 import json
 import shutil
+from abc import ABC, abstractmethod
 from tkinter import Tk, filedialog, messagebox, simpledialog
 from tkinter.ttk import Frame, Button, Treeview, Scrollbar, Style
 from modules.error_handler import error_handler
@@ -11,98 +12,114 @@ from rich.console import Console
 
 console = Console()
 
-CONFIG_DIR = "config"
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+class ConfigManager:
+    CONFIG_DIR = "config"
+    CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+    @staticmethod
+    def load_config():
+        if not os.path.exists(ConfigManager.CONFIG_DIR):
+            os.makedirs(ConfigManager.CONFIG_DIR)
+        if not os.path.exists(ConfigManager.CONFIG_FILE):
+            default_config = {
+                "blacklisted_files": [],
+                "blacklisted_directories": [],
+                "blacklisted_filetypes": []
+            }
+            with open(ConfigManager.CONFIG_FILE, 'w') as f:
+                json.dump(default_config, f, indent=4)
+            return default_config
+        with open(ConfigManager.CONFIG_FILE, 'r') as f:
+            return json.load(f)
+
+    @staticmethod
+    def save_config(config):
+        with open(ConfigManager.CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
 
 
-def load_config():
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-    if not os.path.exists(CONFIG_FILE):
-        default_config = {
-            "blacklisted_files": [],
-            "blacklisted_directories": [],
-            "blacklisted_filetypes": []
+class FileOrganizer(ABC):
+
+    def __init__(self, config):
+        self.config = config
+
+    @staticmethod
+    def get_file_extension(file_path):
+        return os.path.splitext(file_path)[1][1:].lower()
+
+    @staticmethod
+    def create_folder(directory, folder_name):
+        folder_path = os.path.join(directory, folder_name)
+        os.makedirs(folder_path, exist_ok=True)
+        return folder_path
+
+    @staticmethod
+    def move_file(file_path, new_path):
+        shutil.move(file_path, new_path)
+        return file_path, new_path
+
+    @abstractmethod
+    def organize_files(self, directory, specific_type=None):
+        pass
+
+    def is_blacklisted(self, file_path, filename):
+        """
+        Check if a file or directory is blacklisted.
+        """
+        file_extension = self.get_file_extension(filename)
+        is_blacklisted_file = filename in self.config['blacklisted_files']
+        is_blacklisted_dir = any(
+            os.path.commonpath([bl, file_path]) == bl
+            for bl in self.config['blacklisted_directories'])
+        is_blacklisted_type = file_extension in self.config[
+            'blacklisted_filetypes']
+
+        return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
+
+
+class SyncFileOrganizer(FileOrganizer):
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def organize_files(self, directory, specific_type=None):
+        organized_files = []
+        file_categories = {
+            'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
+            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
+            'Audio': ['mp3', 'wav', 'ogg', 'flac'],
+            'Videos': ['mp4', 'avi', 'mkv', 'mov']
         }
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(default_config, f, indent=4)
-        return default_config
-    with open(CONFIG_FILE, 'r') as f:
-        return json.load(f)
 
-
-def save_config(config):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=4)
-
-
-config = load_config()
-
-
-def get_file_extension(file_path):
-    return os.path.splitext(file_path)[1][1:].lower()
-
-
-def create_folder(directory, folder_name):
-    folder_path = os.path.join(directory, folder_name)
-    os.makedirs(folder_path, exist_ok=True)
-    return folder_path
-
-
-def move_file(file_path, new_path):
-    shutil.move(file_path, new_path)
-    return file_path, new_path
-
-
-def is_blacklisted(file_path, filename):
-    """
-    Check if a file or directory is blacklisted.
-    """
-    file_extension = get_file_extension(filename)
-    is_blacklisted_file = filename in config['blacklisted_files']
-    is_blacklisted_dir = any(
-        os.path.commonpath([bl, file_path]) == bl
-        for bl in config['blacklisted_directories'])
-    is_blacklisted_type = file_extension in config['blacklisted_filetypes']
-
-    return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
-
-
-def organize_files(directory, specific_type=None):
-    organized_files = []
-    file_categories = {
-        'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
-        'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
-        'Audio': ['mp3', 'wav', 'ogg', 'flac'],
-        'Videos': ['mp4', 'avi', 'mkv', 'mov']
-    }
-
-    for root, _, files in os.walk(directory):
-        for filename in files:
-            file_path = os.path.join(root, filename)
-            if is_blacklisted(file_path, filename):
-                continue
-
-            if os.path.isfile(file_path):
-                file_extension = get_file_extension(file_path)
-                if specific_type and file_extension != specific_type:
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                if self.is_blacklisted(file_path, filename):
                     continue
-                category_folder = next(
-                    (cat for cat, exts in file_categories.items()
-                     if file_extension in exts), 'Others')
 
-                if category_folder == 'Documents':
-                    category_folder = create_folder(directory, category_folder)
-                    extension_folder = create_folder(category_folder,
-                                                     file_extension.upper())
-                    new_path = os.path.join(extension_folder, filename)
-                else:
-                    category_folder = create_folder(directory, category_folder)
-                    new_path = os.path.join(category_folder, filename)
+                if os.path.isfile(file_path):
+                    file_extension = self.get_file_extension(file_path)
+                    if specific_type and file_extension != specific_type:
+                        continue
+                    category_folder = next(
+                        (cat for cat, exts in file_categories.items()
+                         if file_extension in exts), 'Others')
 
-                organized_files.append(move_file(file_path, new_path))
+                    if category_folder == 'Documents':
+                        category_folder = self.create_folder(
+                            directory, category_folder)
+                        extension_folder = self.create_folder(
+                            category_folder, file_extension.upper())
+                        new_path = os.path.join(extension_folder, filename)
+                    else:
+                        category_folder = self.create_folder(
+                            directory, category_folder)
+                        new_path = os.path.join(category_folder, filename)
 
-    return organized_files
+                    organized_files.append(self.move_file(file_path, new_path))
+
+        return organized_files
 
 
 def delete_empty_folders(path):
@@ -130,7 +147,7 @@ def restore_files(organized_files):
                         "Files restored to their original locations.")
 
 
-def show_blacklist():
+def show_blacklist(config):
     blacklist_message = ""
     for key in [
             'blacklisted_files', 'blacklisted_directories',
@@ -144,7 +161,7 @@ def show_blacklist():
     messagebox.showinfo("Blacklist", blacklist_message)
 
 
-def handle_blacklist(action, items):
+def handle_blacklist(action, items, config):
     """
     Handles adding or removing items from the blacklist in batch.
     """
@@ -175,7 +192,8 @@ def handle_blacklist(action, items):
                     "Blacklist",
                     f"'{item}' not found in blacklisted {item_type}.")
 
-    save_config(config)  # Save the updated config after processing all items
+    ConfigManager.save_config(
+        config)  # Save the updated config after processing all items
 
 
 def get_directory_stats(directory):
@@ -213,7 +231,7 @@ def update_tree(tree, directory):
 
 
 def launch_gui():
-    global current_directory  # Changed to global to access the global variable
+    global current_directory
 
     root = Tk()
     root.title("File Organizer GUI")
@@ -222,15 +240,17 @@ def launch_gui():
     style = Style()
     style.configure("Treeview", rowheight=25)
 
-    # Create frame for buttons
     button_frame = Frame(root)
     button_frame.pack(fill='x')
 
     current_directory = os.getcwd()
     organized_files = []
 
+    config = ConfigManager.load_config()
+    organizer = SyncFileOrganizer(config)
+
     def open_directory():
-        global current_directory  # Changed to global to access the global variable
+        global current_directory
         directory = filedialog.askdirectory(initialdir=current_directory)
         if directory:
             current_directory = directory
@@ -240,7 +260,8 @@ def launch_gui():
         filetype = simpledialog.askstring(
             "File Organizer",
             "Enter file type to organize (leave empty for all):")
-        organized_files.extend(organize_files(current_directory, filetype))
+        organized_files.extend(
+            organizer.organize_files(current_directory, filetype))
         update_tree(tree, current_directory)
         messagebox.showinfo("File Organizer", "File organization completed.")
 
@@ -277,33 +298,29 @@ def launch_gui():
                 "Enter filenames, directories, or filetypes to blacklist (comma-separated):"
             )
             if items:
-                handle_blacklist(action, items)
+                handle_blacklist(action, items, config)
         else:
             messagebox.showwarning("Blacklist",
                                    "Invalid action. Use 'add' or 'remove'.")
 
     def reset_to_default():
-        """
-        Resets the configuration to its default state.
-        """
         global config
         default_config = {
             "blacklisted_files": [],
             "blacklisted_directories": [],
             "blacklisted_filetypes": []
         }
-        save_config(default_config)
+        ConfigManager.save_config(default_config)
         config = default_config
         messagebox.showinfo("Reset",
                             "Configuration has been reset to default.")
 
     def on_show_blacklist():
-        show_blacklist()
+        show_blacklist(config)
 
     def on_exit():
         root.quit()
 
-    # Button definitions
     Button(button_frame, text="Open Directory",
            command=open_directory).pack(side='left', padx=5, pady=5)
     Button(button_frame, text="Organize Files",

@@ -3,8 +3,10 @@
 import os
 import json
 import shutil
+import asyncio
+from abc import ABC, abstractmethod
 from tkinter import Tk, messagebox
-from modules.gui import launch_gui  # Import the GUI launcher
+from modules.gui import launch_gui
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -18,101 +20,117 @@ from modules.error_handler import error_handler
 
 console = Console()
 
-CONFIG_DIR = "config"
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+class ConfigManager:
+    CONFIG_DIR = "config"
+    CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+    @staticmethod
+    def load_config():
+        if not os.path.exists(ConfigManager.CONFIG_DIR):
+            os.makedirs(ConfigManager.CONFIG_DIR)
+        if not os.path.exists(ConfigManager.CONFIG_FILE):
+            default_config = {
+                "blacklisted_files": [],
+                "blacklisted_directories": [],
+                "blacklisted_filetypes": []
+            }
+            with open(ConfigManager.CONFIG_FILE, 'w') as f:
+                json.dump(default_config, f, indent=4)
+            return default_config
+        with open(ConfigManager.CONFIG_FILE, 'r') as f:
+            return json.load(f)
+
+    @staticmethod
+    def save_config(config):
+        with open(ConfigManager.CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
 
 
-def load_config():
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-    if not os.path.exists(CONFIG_FILE):
-        default_config = {
-            "blacklisted_files": [],
-            "blacklisted_directories": [],
-            "blacklisted_filetypes": []
+class FileOrganizer(ABC):
+
+    def __init__(self, config):
+        self.config = config
+
+    @staticmethod
+    def get_file_extension(file_path):
+        return os.path.splitext(file_path)[1][1:].lower()
+
+    @staticmethod
+    def create_folder(directory, folder_name):
+        folder_path = os.path.join(directory, folder_name)
+        os.makedirs(folder_path, exist_ok=True)
+        return folder_path
+
+    @staticmethod
+    def move_file(file_path, new_path):
+        shutil.move(file_path, new_path)
+        return file_path, new_path
+
+    @abstractmethod
+    async def organize_files(self, directory, specific_type=None):
+        pass
+
+    def is_blacklisted(self, file_path, filename):
+        """
+        Check if a file or directory is blacklisted.
+        """
+        file_extension = self.get_file_extension(filename)
+        is_blacklisted_file = filename in self.config['blacklisted_files']
+        is_blacklisted_dir = any(
+            os.path.commonpath([bl, file_path]) == bl
+            for bl in self.config['blacklisted_directories'])
+        is_blacklisted_type = file_extension in self.config[
+            'blacklisted_filetypes']
+
+        return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
+
+
+class AsyncFileOrganizer(FileOrganizer):
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    async def organize_files(self, directory, specific_type=None):
+        organized_files = []
+        file_categories = {
+            'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
+            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
+            'Audio': ['mp3', 'wav', 'ogg', 'flac'],
+            'Videos': ['mp4', 'avi', 'mkv', 'mov']
         }
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(default_config, f, indent=4)
-        return default_config
-    with open(CONFIG_FILE, 'r') as f:
-        return json.load(f)
 
-
-def save_config(config):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=4)
-
-
-config = load_config()
-
-
-def get_file_extension(file_path):
-    return os.path.splitext(file_path)[1][1:].lower()
-
-
-def create_folder(directory, folder_name):
-    folder_path = os.path.join(directory, folder_name)
-    os.makedirs(folder_path, exist_ok=True)
-    return folder_path
-
-
-def move_file(file_path, new_path):
-    shutil.move(file_path, new_path)
-    return file_path, new_path
-
-
-def is_blacklisted(file_path, filename):
-    """
-    Check if a file or directory is blacklisted.
-    """
-    file_extension = get_file_extension(filename)
-    is_blacklisted_file = filename in config['blacklisted_files']
-    is_blacklisted_dir = any(
-        os.path.commonpath([bl, file_path]) == bl
-        for bl in config['blacklisted_directories'])
-    is_blacklisted_type = file_extension in config['blacklisted_filetypes']
-
-    return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
-
-
-def organize_files(directory, specific_type=None):
-    organized_files = []
-    file_categories = {
-        'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
-        'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
-        'Audio': ['mp3', 'wav', 'ogg', 'flac'],
-        'Videos': ['mp4', 'avi', 'mkv', 'mov']
-    }
-
-    for root, _, files in os.walk(directory):
-        for filename in files:
-            file_path = os.path.join(root, filename)
-            if is_blacklisted(file_path, filename):
-                continue
-
-            if os.path.isfile(file_path):
-                file_extension = get_file_extension(file_path)
-                if specific_type and file_extension != specific_type:
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                if self.is_blacklisted(file_path, filename):
                     continue
-                category_folder = next(
-                    (cat for cat, exts in file_categories.items()
-                     if file_extension in exts), 'Others')
 
-                if category_folder == 'Documents':
-                    category_folder = create_folder(directory, category_folder)
-                    extension_folder = create_folder(category_folder,
-                                                     file_extension.upper())
-                    new_path = os.path.join(extension_folder, filename)
-                else:
-                    category_folder = create_folder(directory, category_folder)
-                    new_path = os.path.join(category_folder, filename)
+                if os.path.isfile(file_path):
+                    file_extension = self.get_file_extension(file_path)
+                    if specific_type and file_extension != specific_type:
+                        continue
+                    category_folder = next(
+                        (cat for cat, exts in file_categories.items()
+                         if file_extension in exts), 'Others')
 
-                organized_files.append(move_file(file_path, new_path))
+                    if category_folder == 'Documents':
+                        category_folder = self.create_folder(
+                            directory, category_folder)
+                        extension_folder = self.create_folder(
+                            category_folder, file_extension.upper())
+                        new_path = os.path.join(extension_folder, filename)
+                    else:
+                        category_folder = self.create_folder(
+                            directory, category_folder)
+                        new_path = os.path.join(category_folder, filename)
 
-    return organized_files
+                    organized_files.append(self.move_file(file_path, new_path))
+
+        return organized_files
 
 
-def list_files(directory):
+async def list_files(directory):
     table = Table(show_header=True, header_style="bold magenta", expand=False)
     table.add_column("Name", style="cyan")
     table.add_column("Type", style="green")
@@ -129,7 +147,7 @@ def list_files(directory):
     console.print(table)
 
 
-def search_files(directory, query):
+async def search_files(directory, query):
     results = []
     for root, _, files in os.walk(directory):
         results.extend(
@@ -138,7 +156,7 @@ def search_files(directory, query):
     return results
 
 
-def restore_files(organized_files):
+async def restore_files(organized_files):
     for original_path, new_path in organized_files:
         if os.path.exists(new_path):
             shutil.move(new_path, original_path)
@@ -146,7 +164,7 @@ def restore_files(organized_files):
         "[green]✓ Files restored to their original locations.[/green]")
 
 
-def show_home_screen():
+async def show_home_screen():
     layout = Layout()
     layout.split_column(Layout(name="header", size=3), Layout(name="body"),
                         Layout(name="footer", size=1))
@@ -166,7 +184,7 @@ def show_home_screen():
     console.print(layout)
 
 
-def get_directory_stats(directory):
+async def get_directory_stats(directory):
     total_files = total_dirs = total_size = 0
     for root, dirs, files in os.walk(directory):
         total_dirs += len(dirs)
@@ -176,89 +194,97 @@ def get_directory_stats(directory):
     return total_files, total_dirs, total_size
 
 
-def handle_blacklist(command):
-    """
-    Handles adding or removing items from the blacklist in batch.
-    """
-    if len(command) < 3:
-        console.print(
-            "[red]Usage: blacklist [add/remove] [filename, directory, or filetype (comma-separated)][/red]"
-        )
-        return
+class BlacklistHandler:
 
-    action, items = command[1], command[2]
-    items_list = items.split(",")  # Allow multiple items separated by commas
+    def __init__(self, config):
+        self.config = config
 
-    for item in items_list:
-        item = item.strip()  # Remove any extra spaces
-        item_type = ('filetypes' if item.startswith('.') else
-                     'directories' if os.path.isdir(item) else 'files')
-        blacklist_key = f'blacklisted_{item_type}'
+    async def handle_blacklist(self, command):
+        """
+        Handles adding or removing items from the blacklist in batch.
+        """
+        if len(command) < 3:
+            console.print(
+                "[red]Usage: blacklist [add/remove] [filename, directory, or filetype (comma-separated)][/red]"
+            )
+            return
 
-        if action == 'add':
-            if item not in config[blacklist_key]:
-                config[blacklist_key].append(item)
-                console.print(
-                    f"[green]✓ Added '{item}' to blacklisted {item_type}.[/green]"
-                )
+        action, items = command[1], command[2]
+        items_list = items.split(
+            ",")  # Allow multiple items separated by commas
+
+        for item in items_list:
+            item = item.strip()  # Remove any extra spaces
+            item_type = ('filetypes' if item.startswith('.') else
+                         'directories' if os.path.isdir(item) else 'files')
+            blacklist_key = f'blacklisted_{item_type}'
+
+            if action == 'add':
+                if item not in self.config[blacklist_key]:
+                    self.config[blacklist_key].append(item)
+                    console.print(
+                        f"[green]✓ Added '{item}' to blacklisted {item_type}.[/green]"
+                    )
+                else:
+                    console.print(
+                        f"[yellow]'{item}' is already in blacklisted {item_type}.[/yellow]"
+                    )
+            elif action == 'remove':
+                if item in self.config[blacklist_key]:
+                    self.config[blacklist_key].remove(item)
+                    console.print(
+                        f"[green]✓ Removed '{item}' from blacklisted {item_type}.[/green]"
+                    )
+                else:
+                    console.print(
+                        f"[yellow]'{item}' not found in blacklisted {item_type}.[/yellow]"
+                    )
             else:
                 console.print(
-                    f"[yellow]'{item}' is already in blacklisted {item_type}.[/yellow]"
-                )
-        elif action == 'remove':
-            if item in config[blacklist_key]:
-                config[blacklist_key].remove(item)
-                console.print(
-                    f"[green]✓ Removed '{item}' from blacklisted {item_type}.[/green]"
-                )
-            else:
-                console.print(
-                    f"[yellow]'{item}' not found in blacklisted {item_type}.[/yellow]"
-                )
-        else:
-            console.print("[red]Invalid action. Use 'add' or 'remove'.[/red]")
+                    "[red]Invalid action. Use 'add' or 'remove'.[/red]")
 
-    save_config(config)  # Save the updated config after processing all items
+        ConfigManager.save_config(
+            self.config)  # Save the updated config after processing all items
 
-
-def show_blacklist():
-    if any(config[key] for key in [
-            'blacklisted_files', 'blacklisted_directories',
-            'blacklisted_filetypes'
-    ]):
-        for key in [
+    async def show_blacklist(self):
+        if any(self.config[key] for key in [
                 'blacklisted_files', 'blacklisted_directories',
                 'blacklisted_filetypes'
-        ]:
-            if config[key]:
-                console.print(
-                    Panel(
-                        ", ".join(config[key]),
-                        title=f"Blacklisted {key.split('_')[1].capitalize()}",
-                        border_style="bold",
-                        expand=False))
-    else:
-        console.print("[yellow]All blacklists are empty.[/yellow]")
+        ]):
+            for key in [
+                    'blacklisted_files', 'blacklisted_directories',
+                    'blacklisted_filetypes'
+            ]:
+                if self.config[key]:
+                    console.print(
+                        Panel(", ".join(self.config[key]),
+                              title=
+                              f"Blacklisted {key.split('_')[1].capitalize()}",
+                              border_style="bold",
+                              expand=False))
+        else:
+            console.print("[yellow]All blacklists are empty.[/yellow]")
+
+    @staticmethod
+    def reset_to_default():
+        """
+        Resets the configuration to its default state.
+        """
+        default_config = {
+            "blacklisted_files": [],
+            "blacklisted_directories": [],
+            "blacklisted_filetypes": []
+        }
+        ConfigManager.save_config(default_config)
+        console.print(
+            "[green]Configuration has been reset to default.[/green]")
 
 
-def reset_to_default():
-    """
-    Resets the configuration to its default state.
-    """
-    default_config = {
-        "blacklisted_files": [],
-        "blacklisted_directories": [],
-        "blacklisted_filetypes": []
-    }
-    save_config(default_config)
-    console.print("[green]Configuration has been reset to default.[/green]")
-
-
-def clear_screen():
+async def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def main():
+async def main():
     current_directory = os.getcwd()
     organized_files = []
 
@@ -272,6 +298,10 @@ def main():
     ]
     error_handler.set_commands(available_commands)
 
+    config = ConfigManager.load_config()
+    organizer = AsyncFileOrganizer(config)
+    blacklist_handler = BlacklistHandler(config)
+
     def get_completer(command):
         if command in ['cd', 'organize']:
             return dir_completer
@@ -280,15 +310,14 @@ def main():
         else:
             return WordCompleter(available_commands)
 
-    # Define a style for the prompt using prompt_toolkit's Style class
     prompt_style = Style.from_dict({'prompt': 'cyan'})
 
-    console.clear()
-    show_home_screen()
+    await clear_screen()
+    await show_home_screen()
 
     while True:
         try:
-            user_input = session.prompt(
+            user_input = await session.prompt_async(
                 "\n❯ ",  # Removed rich style and added plain text prompt
                 style=prompt_style,  # Apply the defined style to the prompt
                 completer=get_completer(
@@ -300,21 +329,25 @@ def main():
 
             if command[0] == 'organize':
                 if len(command) == 3:
-                    organized_files = organize_files(command[1], command[2])
+                    organized_files = await organizer.organize_files(
+                        command[1], command[2])
                 elif len(command) == 2:
-                    organized_files = organize_files(command[1])
+                    organized_files = await organizer.organize_files(command[1]
+                                                                     )
                 else:
-                    organized_files = organize_files(current_directory)
+                    organized_files = await organizer.organize_files(
+                        current_directory)
                 console.print("[green]✓ File organization completed.[/green]")
             elif command[0] == 'list':
-                list_files(current_directory)
+                await list_files(current_directory)
             elif command[0] == 'stats':
-                files, dirs, size = get_directory_stats(current_directory)
+                files, dirs, size = await get_directory_stats(current_directory
+                                                              )
                 console.print(
                     f"[green]Files: {files}, Directories: {dirs}, Total size: {size:,} bytes[/green]"
                 )
             elif command[0] == 'search' and len(command) > 1:
-                results = search_files(current_directory, command[1])
+                results = await search_files(current_directory, command[1])
                 if results:
                     console.print(
                         Panel(Align.left("\n".join(results)),
@@ -340,22 +373,22 @@ def main():
                     f"[yellow]Current directory: {current_directory}[/yellow]")
             elif command[0] == 'restore':
                 if organized_files:
-                    restore_files(organized_files)
+                    await restore_files(organized_files)
                     organized_files = []
                 else:
                     console.print(
                         "[yellow]No files to restore. Use 'organize' first.[/yellow]"
                     )
             elif command[0] == 'blacklist':
-                handle_blacklist(command)
+                await blacklist_handler.handle_blacklist(command)
 
             elif command[0] == 'reset':
-                reset_to_default()
+                BlacklistHandler.reset_to_default()
 
             elif command[0] == 'show_blacklist':
-                show_blacklist()
+                await blacklist_handler.show_blacklist()
             elif command[0] == 'clear':
-                clear_screen()
+                await clear_screen()
             elif command[0] == 'exit':
                 console.print(
                     "[cyan]Thank you for using the File Organizer. Goodbye![/cyan]"
@@ -365,7 +398,7 @@ def main():
                 if len(command) > 1:
                     console.print(show_command_help(command[1]))
                 else:
-                    show_home_screen()
+                    await show_home_screen()
             else:
                 raise ValueError(f"Invalid command: {command[0]}")
 
@@ -395,6 +428,6 @@ if __name__ == "__main__":
             error_handler.handle_error(e, context="Launching GUI")
     else:
         try:
-            main()
+            asyncio.run(main())
         except Exception as e:
             error_handler.handle_error(e, context="Main program execution")
