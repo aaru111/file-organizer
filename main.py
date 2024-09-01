@@ -1,3 +1,5 @@
+# main.py
+
 import os
 import shutil
 import json
@@ -9,11 +11,13 @@ from rich.align import Align
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter, PathCompleter
 from modules.help import get_help_table, show_command_help
+from modules.error_handler import error_handler
 
 console = Console()
 
 CONFIG_DIR = "config"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
 
 def load_config():
     if not os.path.exists(CONFIG_DIR):
@@ -30,28 +34,35 @@ def load_config():
     with open(CONFIG_FILE, 'r') as f:
         return json.load(f)
 
+
 def save_config(config):
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=4)
 
+
 config = load_config()
+
 
 def get_file_extension(file_path):
     return os.path.splitext(file_path)[1][1:].lower()
+
 
 def create_folder(directory, folder_name):
     folder_path = os.path.join(directory, folder_name)
     os.makedirs(folder_path, exist_ok=True)
     return folder_path
 
+
 def move_file(file_path, new_path):
     shutil.move(file_path, new_path)
     return file_path, new_path
 
+
 def is_blacklisted(file_path, filename):
-    return (filename in config['blacklisted_files'] or
-            any(bl in file_path for bl in config['blacklisted_directories']) or
-            get_file_extension(filename) in config['blacklisted_filetypes'])
+    return (filename in config['blacklisted_files']
+            or any(bl in file_path for bl in config['blacklisted_directories'])
+            or get_file_extension(filename) in config['blacklisted_filetypes'])
+
 
 def organize_files(directory, specific_type=None):
     organized_files = []
@@ -89,6 +100,7 @@ def organize_files(directory, specific_type=None):
 
     return organized_files
 
+
 def list_files(directory):
     table = Table(show_header=True, header_style="bold magenta", expand=False)
     table.add_column("Name", style="cyan")
@@ -105,6 +117,7 @@ def list_files(directory):
 
     console.print(table)
 
+
 def search_files(directory, query):
     results = []
     for root, _, files in os.walk(directory):
@@ -113,12 +126,14 @@ def search_files(directory, query):
             if query.lower() in file.lower())
     return results
 
+
 def restore_files(organized_files):
     for original_path, new_path in organized_files:
         if os.path.exists(new_path):
             shutil.move(new_path, original_path)
     console.print(
         "[green]✓ Files restored to their original locations.[/green]")
+
 
 def show_home_screen():
     layout = Layout()
@@ -139,6 +154,7 @@ def show_home_screen():
 
     console.print(layout)
 
+
 def get_directory_stats(directory):
     total_files = total_dirs = total_size = 0
     for root, dirs, files in os.walk(directory):
@@ -148,6 +164,7 @@ def get_directory_stats(directory):
             os.path.getsize(os.path.join(root, name)) for name in files)
     return total_files, total_dirs, total_size
 
+
 def handle_blacklist(command):
     if len(command) < 3:
         console.print(
@@ -156,7 +173,8 @@ def handle_blacklist(command):
         return
 
     action, item = command[1], command[2]
-    item_type = 'files' if '.' not in item else 'filetypes' if item.startswith('.') else 'directories'
+    item_type = 'files' if '.' not in item else 'filetypes' if item.startswith(
+        '.') else 'directories'
     blacklist_key = f'blacklisted_{item_type}'
 
     if action == 'add':
@@ -181,21 +199,28 @@ def handle_blacklist(command):
                 f"[yellow]'{item}' not found in blacklisted {item_type}.[/yellow]"
             )
     else:
-        console.print(
-            "[red]Invalid action. Use 'add' or 'remove'.[/red]"
-        )
+        console.print("[red]Invalid action. Use 'add' or 'remove'.[/red]")
+
 
 def show_blacklist():
-    if any(config[key] for key in ['blacklisted_files', 'blacklisted_directories', 'blacklisted_filetypes']):
-        for key in ['blacklisted_files', 'blacklisted_directories', 'blacklisted_filetypes']:
+    if any(config[key] for key in [
+            'blacklisted_files', 'blacklisted_directories',
+            'blacklisted_filetypes'
+    ]):
+        for key in [
+                'blacklisted_files', 'blacklisted_directories',
+                'blacklisted_filetypes'
+        ]:
             if config[key]:
                 console.print(
-                    Panel(", ".join(config[key]),
-                          title=f"Blacklisted {key.split('_')[1].capitalize()}",
-                          border_style="bold",
-                          expand=False))
+                    Panel(
+                        ", ".join(config[key]),
+                        title=f"Blacklisted {key.split('_')[1].capitalize()}",
+                        border_style="bold",
+                        expand=False))
     else:
         console.print("[yellow]All blacklists are empty.[/yellow]")
+
 
 def main():
     current_directory = os.getcwd()
@@ -205,16 +230,19 @@ def main():
     file_completer = PathCompleter(only_directories=False, expanduser=True)
     dir_completer = PathCompleter(only_directories=True, expanduser=True)
 
+    available_commands = [
+        'organize', 'list', 'search', 'cd', 'pwd', 'restore', 'blacklist',
+        'show_blacklist', 'stats', 'exit', 'help'
+    ]
+    error_handler.set_commands(available_commands)
+
     def get_completer(command):
         if command in ['cd', 'organize']:
             return dir_completer
         elif command in ['blacklist']:
             return file_completer
         else:
-            return WordCompleter([
-                'organize', 'list', 'search', 'cd', 'pwd', 'restore',
-                'blacklist', 'show_blacklist', 'stats', 'exit', 'help'
-            ])
+            return WordCompleter(available_commands)
 
     console.clear()
     show_home_screen()
@@ -293,14 +321,22 @@ def main():
                 else:
                     show_home_screen()
             else:
-                console.print(
-                    "[red]Invalid command. Type 'help' to see available commands.[/red]"
-                )
+                raise ValueError(f"Invalid command: {command[0]}")
 
         except KeyboardInterrupt:
+            console.print(
+                "\n[yellow]Operation cancelled by user. Type 'exit' to quit.[/yellow]"
+            )
             continue
         except EOFError:
+            console.print("\n[cyan]Exiting File Organizer. Goodbye![/cyan]")
             break
+        except Exception as e:
+            error_handler.handle_error(e, context=f"Command: {user_input}")
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        error_handler.handle_error(e, context="Main program execution")
