@@ -327,6 +327,7 @@ class FileOrganizerGUI(QMainWindow):
     def init_ui(self):
         self.setWindowTitle("File Organizer GUI")
         self.setGeometry(100, 100, 1200, 800)
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.setWindowIcon(QIcon('icon.png'))  # Add a custom icon if available
 
         self.central_widget = QWidget(self)
@@ -367,20 +368,19 @@ class FileOrganizerGUI(QMainWindow):
     def add_buttons_panel(self):
         self.buttons_widget = QWidget()
         self.buttons_layout = QGridLayout(self.buttons_widget)
-
-        self.add_button("Open Directory", self.buttons_layout, 0, 0, lambda: asyncio.run(self.open_directory()))
-        self.add_button("Organize Files", self.buttons_layout, 0, 1, lambda: asyncio.run(self.on_organize()))
-        self.add_button("Restore Files", self.buttons_layout, 1, 0, lambda: asyncio.run(self.on_restore()))
-        self.add_button("Stats", self.buttons_layout, 1, 1, self.on_stats)
-        self.add_button("Search", self.buttons_layout, 2, 0, self.on_search)
-        self.add_button("Blacklist", self.buttons_layout, 2, 1, self.on_blacklist)
-        self.add_button("Show Blacklist", self.buttons_layout, 3, 0, self.on_show_blacklist)
-        self.add_button("Reset to Default", self.buttons_layout, 3, 1, self.reset_to_default)
-        self.add_button("Exit", self.buttons_layout, 4, 0, self.close, colspan=2)
-        self.add_button("Buy Me A Coffee", self.buttons_layout, 5, 0, self.on_buy_me_a_coffee, colspan=2)
-
-
+        self.add_button("Buy Me A Coffee", self.buttons_layout, 0, 0, self.on_buy_me_a_coffee, colspan=2)
+        self.add_button("Open Directory", self.buttons_layout, 1, 0, lambda: asyncio.run(self.open_directory()))
+        self.add_button("Organize Files", self.buttons_layout, 1, 1, lambda: asyncio.run(self.on_organize()))
+        self.add_button("Restore Files", self.buttons_layout, 2, 0, lambda: asyncio.run(self.on_restore()))
+        self.add_button("Stats", self.buttons_layout, 2, 1, self.on_stats)
+        self.add_button("Search", self.buttons_layout, 3, 0, self.on_search)
+        self.add_button("Blacklist", self.buttons_layout, 3, 1, self.on_blacklist)
+        self.add_button("Show Blacklist", self.buttons_layout, 4, 0, self.on_show_blacklist)
+        self.add_button("Reset to Default", self.buttons_layout, 4, 1, self.reset_to_default)
+        self.add_button("Exit", self.buttons_layout, 5, 0, self.close, colspan=2)
+    
         self.tree_and_actions_layout.addWidget(self.buttons_widget)
+
 
     def on_buy_me_a_coffee(self) -> None:
         QMessageBox.information(self, "Buy Me A Coffee", "UPI ID: aarav-000@fam")
