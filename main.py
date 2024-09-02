@@ -290,6 +290,22 @@ class FileContentDialog(QDialog):
             with open(path, 'r', errors='ignore') as f:
                 contents = f.read()
         self.text_edit.setPlainText(contents)
+        
+class BuyCoffeeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Buy Me A Coffee")
+        self.resize(400, 400) 
+
+   
+        layout = QVBoxLayout(self)
+        self.image_label = QLabel(self)
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+ 
+        coffee_image_path = "coffee_image.webp" 
+        self.image_label.setPixmap(QPixmap(coffee_image_path).scaledToWidth(350, Qt.TransformationMode.SmoothTransformation))
+        layout.addWidget(self.image_label)
 
 
 class FileOrganizerGUI(QMainWindow):
@@ -340,6 +356,7 @@ class FileOrganizerGUI(QMainWindow):
         self.settings_layout.addWidget(self.settings_toggle_button)
         self.settings_layout.addWidget(self.settings_panel)
         self.splitter.addWidget(self.settings_widget)
+        
 
         # Set initial sizes for splitter panels
         self.splitter.setSizes([900, 300])
@@ -358,8 +375,17 @@ class FileOrganizerGUI(QMainWindow):
         self.add_button("Show Blacklist", self.buttons_layout, 3, 0, self.on_show_blacklist)
         self.add_button("Reset to Default", self.buttons_layout, 3, 1, self.reset_to_default)
         self.add_button("Exit", self.buttons_layout, 4, 0, self.close, colspan=2)
+        self.add_button("Buy Me A Coffee", self.buttons_layout, 5, 0, self.on_buy_me_a_coffee, colspan=2)
+
 
         self.tree_and_actions_layout.addWidget(self.buttons_widget)
+
+    def on_buy_me_a_coffee(self) -> None:
+        QMessageBox.information(self, "Buy Me A Coffee", "UPI ID: aarav-000@fam")
+    
+        coffee_dialog = BuyCoffeeDialog(self)
+        coffee_dialog.exec()
+
 
     def add_button(self, text, layout, row, col, callback, colspan=1):
         button = QPushButton(text)
