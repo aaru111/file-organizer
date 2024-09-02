@@ -1,5 +1,1 @@
-prompt-toolkit==3.0.38
-colorama==0.4.6
-rich
-treelib
-appdirs
+PyQt6==6.4.0
