@@ -8,26 +8,43 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog,
     QGridLayout, QSplitter, QLineEdit, QLabel, QListWidget, QGroupBox,
-    QFormLayout, QTabWidget, QHBoxLayout, QComboBox, QDialog, QPlainTextEdit, QLabel
+    QFormLayout, QTabWidget, QHBoxLayout, QComboBox, QDialog, QPlainTextEdit
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QFont, QColor, QSyntaxHighlighter, QTextCursor, QTextDocument
-from PyQt6.QtGui import QPixmap
-from pygments import highlight
-from pygments.lexers import PythonLexer
-from pygments.formatters import HtmlFormatter
-from PyQt6.QtGui import QTextDocument, QTextCursor
+from PyQt6.QtGui import QIcon, QFont, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor
 
-class PygmentsHighlighter(QSyntaxHighlighter):
+# Define syntax highlighter classes for different file types
+class PythonHighlighter(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
+        self.highlight_rules = []
+
+        # Keywords
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor("#ff5500"))
+        keywords = ["def", "class", "if", "elif", "else", "try", "except", "finally", "for", "while", "return", "import", "from", "as", "with", "self"]
+        self.highlight_rules += [(f"\\b{word}\\b", keyword_format) for word in keywords]
+
+        # Strings
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("#ff00ff"))
+        self.highlight_rules.append(("\".*\"", string_format))
+        self.highlight_rules.append(("'.*'", string_format))
+
+        # Comments
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("#008800"))
+        self.highlight_rules.append(("#[^\n]*", comment_format))
 
     def highlightBlock(self, text):
-        lexer = PythonLexer()
-        formatter = HtmlFormatter(style="colorful", noclasses=True)
-        highlighted_text = highlight(text, lexer, formatter)
-        self.setCurrentBlockState(0)
-        self.setFormat(0, len(text), QColor("white"))
+        for pattern, format in self.highlight_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+
 
 class ConfigManager:
     CONFIG_DIR = "config"
@@ -64,6 +81,7 @@ class ConfigManager:
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
 
+
 class FileOrganizer(ABC):
     def __init__(self, config: Dict[str, List[str]]):
         self._config = config
@@ -97,6 +115,7 @@ class FileOrganizer(ABC):
     async def organize_files(self, directory: str, specific_type: Optional[str] = None) -> List[Tuple[str, str]]:
         pass
 
+
 class SyncFileOrganizer(FileOrganizer):
     async def organize_files(self, directory: str, specific_type: Optional[str] = None) -> List[Tuple[str, str]]:
         organized_files = []
@@ -126,6 +145,7 @@ class SyncFileOrganizer(FileOrganizer):
 
         return organized_files
 
+
 async def delete_empty_folders(path: str) -> None:
     if not os.path.isdir(path):
         return
@@ -136,12 +156,14 @@ async def delete_empty_folders(path: str) -> None:
     if not os.listdir(path):
         os.rmdir(path)
 
+
 async def restore_files(organized_files: List[Tuple[str, str]], current_directory: str) -> None:
     for original_path, new_path in organized_files:
         if os.path.exists(new_path):
             shutil.move(new_path, original_path)
     await delete_empty_folders(current_directory)
     QMessageBox.information(None, "File Organizer", "Files restored to their original locations.")
+
 
 def update_tree(tree: QTreeWidget, directory: str) -> None:
     tree.clear()
@@ -151,6 +173,7 @@ def update_tree(tree: QTreeWidget, directory: str) -> None:
         item_type = "File" if os.path.isfile(item_path) else "Directory"
         item_widget = QTreeWidgetItem(tree, [item, item_type, f"{size} bytes"])
         item_widget.setData(0, Qt.ItemDataRole.UserRole, item_path)
+
 
 class BlacklistHandler:
     def __init__(self, config: Dict[str, List[str]], config_manager: ConfigManager):
@@ -193,6 +216,7 @@ class BlacklistHandler:
         self._config = ConfigManager().config
         self.config_manager.save_config(self._config)
 
+
 def get_directory_stats(directory: str) -> Tuple[int, int, int]:
     total_files, total_dirs, total_size = 0, 0, 0
     for root, dirs, files in os.walk(directory):
@@ -201,12 +225,14 @@ def get_directory_stats(directory: str) -> Tuple[int, int, int]:
         total_size += sum(os.path.getsize(os.path.join(root, name)) for name in files)
     return total_files, total_dirs, total_size
 
+
 def search_files(directory: str, query: str) -> List[str]:
     return [
         os.path.join(root, file)
         for root, _, files in os.walk(directory)
         for file in files if query.lower() in file.lower()
     ]
+
 
 class SettingsPanel(QWidget):
     def __init__(self, config: Dict[str, List[str]], config_manager: ConfigManager, parent=None):
@@ -277,6 +303,7 @@ class SettingsPanel(QWidget):
                     self.categories_list.addItems(self.config['file_categories'].keys())
                     QMessageBox.information(self, "Rename Folder", f"Folder renamed to '{new_name}'.")
 
+
 class FileContentDialog(QDialog):
     def __init__(self, path, parent=None):
         super().__init__(parent)
@@ -289,15 +316,19 @@ class FileContentDialog(QDialog):
         self.load_content(path)
 
     def load_content(self, path):
-        with open(path, 'r', errors='ignore') as f:
-            contents = f.read()
+        if os.path.isdir(path):
+            contents = "\n".join(os.listdir(path))
+        else:
+            with open(path, 'r', errors='ignore') as f:
+                contents = f.read()
         self.text_edit.setPlainText(contents)
-        self.highlight_content(path)
 
     def highlight_content(self, path):
         ext = os.path.splitext(path)[1].lower()
         if ext == '.py':
-            PygmentsHighlighter(self.text_edit.document())
+            PythonHighlighter(self.text_edit.document())
+        # Add other highlighters for other languages
+
 
 class FileOrganizerGUI(QMainWindow):
     def __init__(self):
@@ -315,15 +346,14 @@ class FileOrganizerGUI(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("File Organizer GUI")
-        self.setWindowState(Qt.WindowState.WindowFullScreen)  # Open in fullscreen mode
+        self.setGeometry(100, 100, 1200, 800)
+        self.setWindowIcon(QIcon('icon.png'))  # Add a custom icon if available
 
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
 
         # Main layout with splitter
-        self.main_layout = QVBoxLayout(self.central_widget)
-        self.create_donate_button()  # Add the donate button at the top
-
+        self.main_layout = QHBoxLayout(self.central_widget)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Tree and Actions Panel
@@ -352,29 +382,6 @@ class FileOrganizerGUI(QMainWindow):
         # Set initial sizes for splitter panels
         self.splitter.setSizes([900, 300])
         self.main_layout.addWidget(self.splitter)
-
-    def create_donate_button(self):
-        self.donate_button = QPushButton("Buy me a coffee", self)
-        self.donate_button.setFont(QFont("Arial", 14))
-        self.donate_button.clicked.connect(self.show_donate_image)
-        self.main_layout.addWidget(self.donate_button)
-
-    def show_donate_image(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Buy me a coffee")
-        dialog.setFixedSize(400, 400)
-        layout = QVBoxLayout(dialog)
-
-        # Add the image
-        image_label = QLabel(dialog)
-        pixmap = QPixmap()
-        pixmap.loadFromData(
-            QByteArray(requests.get("https://files.catbox.moe/wrfk2c.webp").content)
-        )
-        image_label.setPixmap(pixmap)
-        layout.addWidget(image_label)
-
-        dialog.exec()
 
     def add_buttons_panel(self):
         self.buttons_widget = QWidget()
@@ -468,11 +475,13 @@ class FileOrganizerGUI(QMainWindow):
             dialog = FileContentDialog(path, self)
             dialog.exec()
 
+
 def main():
     app = QApplication([])
     gui = FileOrganizerGUI()
     gui.show()
     app.exec()
+
 
 if __name__ == "__main__":
     main()
