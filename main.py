@@ -1,70 +1,79 @@
 import os
 import json
 import shutil
+import asyncio
 from abc import ABC, abstractmethod
-from tkinter import Tk, filedialog, messagebox, simpledialog
-from tkinter.ttk import Frame, Button, Treeview, Scrollbar, Style
+from typing import List, Tuple, Dict, Optional
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, 
+    QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog, QGridLayout
+)
+from PyQt6.QtCore import Qt
+
 
 class ConfigManager:
     CONFIG_DIR = "config"
     CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
-    @staticmethod
-    def load_config():
-        if not os.path.exists(ConfigManager.CONFIG_DIR):
-            os.makedirs(ConfigManager.CONFIG_DIR)
-        if not os.path.exists(ConfigManager.CONFIG_FILE):
+    def __init__(self):
+        self.config = self._load_config()
+
+    def _load_config(self) -> Dict[str, List[str]]:
+        if not os.path.exists(self.CONFIG_DIR):
+            os.makedirs(self.CONFIG_DIR)
+        if not os.path.exists(self.CONFIG_FILE):
             default_config = {
                 "blacklisted_files": [],
                 "blacklisted_directories": [],
                 "blacklisted_filetypes": []
             }
-            with open(ConfigManager.CONFIG_FILE, 'w') as f:
-                json.dump(default_config, f, indent=4)
+            self.save_config(default_config)
             return default_config
-        with open(ConfigManager.CONFIG_FILE, 'r') as f:
+        with open(self.CONFIG_FILE, 'r') as f:
             return json.load(f)
 
-    @staticmethod
-    def save_config(config):
-        with open(ConfigManager.CONFIG_FILE, 'w') as f:
+    def save_config(self, config: Optional[Dict[str, List[str]]] = None) -> None:
+        config = config if config else self.config
+        with open(self.CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=4)
 
+
 class FileOrganizer(ABC):
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Dict[str, List[str]]):
+        self._config = config
 
     @staticmethod
-    def get_file_extension(file_path):
+    def get_file_extension(file_path: str) -> str:
         return os.path.splitext(file_path)[1][1:].lower()
 
     @staticmethod
-    def create_folder(directory, folder_name):
+    def create_folder(directory: str, folder_name: str) -> str:
         folder_path = os.path.join(directory, folder_name)
         os.makedirs(folder_path, exist_ok=True)
         return folder_path
 
     @staticmethod
-    def move_file(file_path, new_path):
+    def move_file(file_path: str, new_path: str) -> Tuple[str, str]:
         shutil.move(file_path, new_path)
         return file_path, new_path
 
-    def is_blacklisted(self, file_path, filename):
+    def is_blacklisted(self, file_path: str, filename: str) -> bool:
         file_extension = self.get_file_extension(filename)
-        is_blacklisted_file = filename in self.config['blacklisted_files']
+        is_blacklisted_file = filename in self._config['blacklisted_files']
         is_blacklisted_dir = any(
             os.path.commonpath([bl, file_path]) == bl
-            for bl in self.config['blacklisted_directories'])
-        is_blacklisted_type = file_extension in self.config[
-            'blacklisted_filetypes']
+            for bl in self._config['blacklisted_directories']
+        )
+        is_blacklisted_type = file_extension in self._config['blacklisted_filetypes']
         return is_blacklisted_file or is_blacklisted_dir or is_blacklisted_type
 
     @abstractmethod
-    def organize_files(self, directory, specific_type=None):
+    async def organize_files(self, directory: str, specific_type: Optional[str] = None) -> List[Tuple[str, str]]:
         pass
 
+
 class SyncFileOrganizer(FileOrganizer):
-    def organize_files(self, directory, specific_type=None):
+    async def organize_files(self, directory: str, specific_type: Optional[str] = None) -> List[Tuple[str, str]]:
         organized_files = []
         file_categories = {
             'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
@@ -79,214 +88,216 @@ class SyncFileOrganizer(FileOrganizer):
                 if self.is_blacklisted(file_path, filename):
                     continue
 
-                if os.path.isfile(file_path):
-                    file_extension = self.get_file_extension(file_path)
-                    if specific_type and file_extension != specific_type:
-                        continue
-                    category_folder = next(
-                        (cat for cat, exts in file_categories.items()
-                         if file_extension in exts), 'Others')
+                file_extension = self.get_file_extension(file_path)
+                if specific_type and file_extension != specific_type:
+                    continue
 
-                    if category_folder == 'Documents':
-                        category_folder = self.create_folder(directory, category_folder)
-                        extension_folder = self.create_folder(category_folder, file_extension.upper())
-                        new_path = os.path.join(extension_folder, filename)
-                    else:
-                        category_folder = self.create_folder(directory, category_folder)
-                        new_path = os.path.join(category_folder, filename)
+                category_folder = next(
+                    (cat for cat, exts in file_categories.items() if file_extension in exts), 'Others'
+                )
 
-                    organized_files.append(self.move_file(file_path, new_path))
+                base_folder = self.create_folder(directory, category_folder)
+                new_path = os.path.join(base_folder, filename)
+                if category_folder == 'Documents':
+                    extension_folder = self.create_folder(base_folder, file_extension.upper())
+                    new_path = os.path.join(extension_folder, filename)
+
+                organized_files.append(self.move_file(file_path, new_path))
 
         return organized_files
 
-def delete_empty_folders(path):
+
+async def delete_empty_folders(path: str) -> None:
     if not os.path.isdir(path):
         return
     for subdir in os.listdir(path):
         full_path = os.path.join(path, subdir)
         if os.path.isdir(full_path):
-            delete_empty_folders(full_path)
+            await delete_empty_folders(full_path)
     if not os.listdir(path):
         os.rmdir(path)
 
-def restore_files(organized_files):
+
+async def restore_files(organized_files: List[Tuple[str, str]], current_directory: str) -> None:
     for original_path, new_path in organized_files:
         if os.path.exists(new_path):
             shutil.move(new_path, original_path)
-    delete_empty_folders(current_directory)
-    messagebox.showinfo("File Organizer", "Files restored to their original locations.")
+    await delete_empty_folders(current_directory)
+    QMessageBox.information(None, "File Organizer", "Files restored to their original locations.")
 
-def update_tree(tree, directory):
-    for i in tree.get_children():
-        tree.delete(i)
 
+def update_tree(tree: QTreeWidget, directory: str) -> None:
+    tree.clear()
     for item in os.listdir(directory):
         item_path = os.path.join(directory, item)
-        if os.path.isfile(item_path):
-            tree.insert('', 'end', text=item, values=("File", os.path.getsize(item_path)))
-        else:
-            tree.insert('', 'end', text=item, values=("Directory", ""))
+        size = os.path.getsize(item_path) if os.path.isfile(item_path) else ""
+        item_type = "File" if os.path.isfile(item_path) else "Directory"
+        QTreeWidgetItem(tree, [item, item_type, f"{size} bytes"])
+
 
 class BlacklistHandler:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: Dict[str, List[str]], config_manager: ConfigManager):
+        self._config = config
+        self.config_manager = config_manager
 
-    def handle_blacklist(self, action, items):
-        items_list = items.split(",")
+    def handle_blacklist(self, action: str, items: str) -> None:
+        items_list = [item.strip() for item in items.split(",")]
         for item in items_list:
-            item = item.strip()
-            item_type = ('filetypes' if item.startswith('.') else
-                         'directories' if os.path.isdir(item) else 'files')
+            item_type = (
+                'filetypes' if item.startswith('.') else
+                'directories' if os.path.isdir(item) else 'files'
+            )
             blacklist_key = f'blacklisted_{item_type}'
 
             if action == 'add':
-                if item not in self.config[blacklist_key]:
-                    self.config[blacklist_key].append(item)
-                    messagebox.showinfo("Blacklist", f"Added '{item}' to blacklisted {item_type}.")
+                if item not in self._config[blacklist_key]:
+                    self._config[blacklist_key].append(item)
+                    QMessageBox.information(None, "Blacklist", f"Added '{item}' to blacklisted {item_type}.")
                 else:
-                    messagebox.showwarning("Blacklist", f"'{item}' is already in blacklisted {item_type}.")
+                    QMessageBox.warning(None, "Blacklist", f"'{item}' is already in blacklisted {item_type}.")
             elif action == 'remove':
-                if item in self.config[blacklist_key]:
-                    self.config[blacklist_key].remove(item)
-                    messagebox.showinfo("Blacklist", f"Removed '{item}' from blacklisted {item_type}.")
+                if item in self._config[blacklist_key]:
+                    self._config[blacklist_key].remove(item)
+                    QMessageBox.information(None, "Blacklist", f"Removed '{item}' from blacklisted {item_type}.")
                 else:
-                    messagebox.showwarning("Blacklist", f"'{item}' not found in blacklisted {item_type}.")
-        ConfigManager.save_config(self.config)
+                    QMessageBox.warning(None, "Blacklist", f"'{item}' not found in blacklisted {item_type}.")
+        self.config_manager.save_config()
 
-    def show_blacklist(self):
+    def show_blacklist(self) -> None:
         blacklist_message = ""
         for key in ['blacklisted_files', 'blacklisted_directories', 'blacklisted_filetypes']:
-            if self.config[key]:
-                blacklist_message += f"Blacklisted {key.split('_')[1].capitalize()}: " + ", ".join(self.config[key]) + "\n"
+            if self._config[key]:
+                blacklist_message += f"Blacklisted {key.split('_')[1].capitalize()}: " + ", ".join(self._config[key]) + "\n"
         if not blacklist_message:
             blacklist_message = "All blacklists are empty."
-        messagebox.showinfo("Blacklist", blacklist_message)
+        QMessageBox.information(None, "Blacklist", blacklist_message)
 
-    @staticmethod
-    def reset_to_default():
-        default_config = {
-            "blacklisted_files": [],
-            "blacklisted_directories": [],
-            "blacklisted_filetypes": []
-        }
-        ConfigManager.save_config(default_config)
-        return default_config
+    def reset_to_default(self) -> None:
+        self._config = ConfigManager().config
+        self.config_manager.save_config(self._config)
 
-def get_directory_stats(directory):
-    total_files = total_dirs = total_size = 0
+
+def get_directory_stats(directory: str) -> Tuple[int, int, int]:
+    total_files, total_dirs, total_size = 0, 0, 0
     for root, dirs, files in os.walk(directory):
         total_dirs += len(dirs)
         total_files += len(files)
         total_size += sum(os.path.getsize(os.path.join(root, name)) for name in files)
     return total_files, total_dirs, total_size
 
-def search_files(directory, query):
-    results = []
-    for root, _, files in os.walk(directory):
-        results.extend(os.path.join(root, file) for file in files if query.lower() in file.lower())
-    return results
 
-def launch_gui():
-    global current_directory
+def search_files(directory: str, query: str) -> List[str]:
+    return [
+        os.path.join(root, file)
+        for root, _, files in os.walk(directory)
+        for file in files if query.lower() in file.lower()
+    ]
 
-    root = Tk()
-    root.title("File Organizer GUI")
-    root.geometry("800x600")
 
-    style = Style()
-    style.configure("Treeview", rowheight=25)
+class FileOrganizerGUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.current_directory = os.getcwd()
+        self.organized_files = []
 
-    button_frame = Frame(root)
-    button_frame.pack(fill='x')
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.config
+        self.organizer = SyncFileOrganizer(self.config)
+        self.blacklist_handler = BlacklistHandler(self.config, self.config_manager)
 
-    current_directory = os.getcwd()
-    organized_files = []
+        self.init_ui()
+        update_tree(self.tree, self.current_directory)
 
-    config = ConfigManager.load_config()
-    organizer = SyncFileOrganizer(config)
-    blacklist_handler = BlacklistHandler(config)
+    def init_ui(self):
+        self.setWindowTitle("File Organizer GUI")
+        self.setGeometry(100, 100, 800, 600)
 
-    def open_directory():
-        global current_directory
-        directory = filedialog.askdirectory(initialdir=current_directory)
+        self.central_widget = QWidget(self)
+        self.setCentralWidget(self.central_widget)
+
+        # Use a QGridLayout for button layout
+        self.layout = QVBoxLayout(self.central_widget)
+        self.grid_layout = QGridLayout()
+        self.layout.addLayout(self.grid_layout)
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Name", "Type", "Size"])
+        self.layout.addWidget(self.tree)
+
+        self.add_buttons()
+
+    def add_buttons(self):
+        self.add_button("Open Directory", self.grid_layout, 0, 0, lambda: asyncio.run(self.open_directory()))
+        self.add_button("Organize Files", self.grid_layout, 0, 1, lambda: asyncio.run(self.on_organize()))
+        self.add_button("Restore Files", self.grid_layout, 1, 0, lambda: asyncio.run(self.on_restore()))
+        self.add_button("Stats", self.grid_layout, 1, 1, self.on_stats)
+        self.add_button("Search", self.grid_layout, 2, 0, self.on_search)
+        self.add_button("Blacklist", self.grid_layout, 2, 1, self.on_blacklist)
+        self.add_button("Show Blacklist", self.grid_layout, 3, 0, self.on_show_blacklist)
+        self.add_button("Reset to Default", self.grid_layout, 3, 1, self.reset_to_default)
+        self.add_button("Exit", self.grid_layout, 4, 0, self.close, colspan=2)
+
+    def add_button(self, text, layout, row, col, callback, colspan=1):
+        button = QPushButton(text)
+        layout.addWidget(button, row, col, 1, colspan)
+        button.clicked.connect(callback)
+
+    async def open_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory", self.current_directory)
         if directory:
-            current_directory = directory
-            update_tree(tree, current_directory)
+            self.current_directory = directory
+            update_tree(self.tree, self.current_directory)
 
-    def on_organize():
-        filetype = simpledialog.askstring("File Organizer", "Enter file type to organize (leave empty for all):")
-        organized_files.extend(organizer.organize_files(current_directory, filetype))
-        update_tree(tree, current_directory)
-        messagebox.showinfo("File Organizer", "File organization completed.")
+    async def on_organize(self) -> None:
+        filetype, ok = QInputDialog.getText(self, "File Organizer", "Enter file type to organize (leave empty for all):")
+        if ok:
+            self.organized_files.extend(await self.organizer.organize_files(self.current_directory, filetype))
+            update_tree(self.tree, self.current_directory)
+            QMessageBox.information(self, "File Organizer", "File organization completed.")
 
-    def on_restore():
-        if organized_files:
-            restore_files(organized_files)
-            update_tree(tree, current_directory)
+    async def on_restore(self) -> None:
+        if self.organized_files:
+            await restore_files(self.organized_files, self.current_directory)
+            update_tree(self.tree, self.current_directory)
         else:
-            messagebox.showwarning("Restore Files", "No files to restore. Use 'Organize' first.")
+            QMessageBox.warning(self, "Restore Files", "No files to restore. Use 'Organize' first.")
 
-    def on_stats():
-        files, dirs, size = get_directory_stats(current_directory)
-        messagebox.showinfo("Directory Stats", f"Files: {files}, Directories: {dirs}, Total size: {size:,} bytes")
+    def on_stats(self) -> None:
+        files, dirs, size = get_directory_stats(self.current_directory)
+        QMessageBox.information(self, "Directory Stats", f"Files: {files}, Directories: {dirs}, Total size: {size:,} bytes")
 
-    def on_search():
-        query = simpledialog.askstring("Search Files", "Enter search query:")
-        if query:
-            results = search_files(current_directory, query)
+    def on_search(self) -> None:
+        query, ok = QInputDialog.getText(self, "Search Files", "Enter search query:")
+        if ok:
+            results = search_files(self.current_directory, query)
             if results:
-                messagebox.showinfo("Search Results", "\n".join(results))
+                QMessageBox.information(self, "Search Results", "\n".join(results))
             else:
-                messagebox.showinfo("Search Results", "No files found matching the query.")
+                QMessageBox.information(self, "Search Results", "No files found matching the query.")
 
-    def on_blacklist():
-        action = simpledialog.askstring("Blacklist Action", "Enter action (add/remove):")
-        if action in ['add', 'remove']:
-            items = simpledialog.askstring("Blacklist Items", "Enter filenames, directories, or filetypes to blacklist (comma-separated):")
-            if items:
-                blacklist_handler.handle_blacklist(action, items)
+    def on_blacklist(self) -> None:
+        action, ok = QInputDialog.getText(self, "Blacklist Action", "Enter action (add/remove):")
+        if ok and action in ['add', 'remove']:
+            items, ok_items = QInputDialog.getText(self, "Blacklist Items", "Enter filenames, directories, or filetypes to blacklist (comma-separated):")
+            if ok_items:
+                self.blacklist_handler.handle_blacklist(action, items)
         else:
-            messagebox.showwarning("Blacklist", "Invalid action. Use 'add' or 'remove'.")
+            QMessageBox.warning(self, "Blacklist", "Invalid action. Use 'add' or 'remove'.")
 
-    def reset_to_default():
-        global config
-        config = blacklist_handler.reset_to_default()
-        messagebox.showinfo("Reset", "Configuration has been reset to default.")
+    def reset_to_default(self) -> None:
+        self.blacklist_handler.reset_to_default()
+        QMessageBox.information(self, "Reset", "Configuration has been reset to default.")
 
-    def on_show_blacklist():
-        blacklist_handler.show_blacklist()
+    def on_show_blacklist(self) -> None:
+        self.blacklist_handler.show_blacklist()
 
-    def on_exit():
-        root.quit()
 
-    Button(button_frame, text="Open Directory", command=open_directory).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Organize Files", command=on_organize).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Restore Files", command=on_restore).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Stats", command=on_stats).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Search", command=on_search).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Blacklist", command=on_blacklist).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Show Blacklist", command=on_show_blacklist).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Reset to Default", command=reset_to_default).pack(side='left', padx=5, pady=5)
-    Button(button_frame, text="Exit", command=on_exit).pack(side='right', padx=5, pady=5)
+def main():
+    app = QApplication([])
+    gui = FileOrganizerGUI()
+    gui.show()
+    app.exec()
 
-    frame = Frame(root)
-    frame.pack(fill='both', expand=True)
-
-    tree = Treeview(frame, columns=('Type', 'Size'), show='tree')
-    tree.heading('#0', text='Name')
-    tree.heading('Type', text='Type')
-    tree.heading('Size', text='Size')
-    tree.pack(side='left', fill='both', expand=True)
-
-    scrollbar = Scrollbar(frame, command=tree.yview)
-    tree.configure(yscroll=scrollbar.set)
-    scrollbar.pack(side='right', fill='y')
-
-    update_tree(tree, current_directory)
-    root.mainloop()
 
 if __name__ == "__main__":
-    try:
-        launch_gui()
-    except Exception as e:
-        error_handler.handle_error(e, context="Launching GUI")
+    main()
