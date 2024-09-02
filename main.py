@@ -5,10 +5,13 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict, Optional
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, 
-    QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog, QGridLayout
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton,
+    QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog,
+    QGridLayout, QSplitter, QLineEdit, QLabel, QListWidget, QGroupBox,
+    QFormLayout, QTabWidget, QHBoxLayout, QComboBox
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon
 
 
 class ConfigManager:
@@ -25,7 +28,14 @@ class ConfigManager:
             default_config = {
                 "blacklisted_files": [],
                 "blacklisted_directories": [],
-                "blacklisted_filetypes": []
+                "blacklisted_filetypes": [],
+                "file_categories": {
+                    'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
+                    'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
+                    'Audio': ['mp3', 'wav', 'ogg', 'flac'],
+                    'Videos': ['mp4', 'avi', 'mkv', 'mov'],
+                    'Python': ['py']
+                }
             }
             self.save_config(default_config)
             return default_config
@@ -75,12 +85,7 @@ class FileOrganizer(ABC):
 class SyncFileOrganizer(FileOrganizer):
     async def organize_files(self, directory: str, specific_type: Optional[str] = None) -> List[Tuple[str, str]]:
         organized_files = []
-        file_categories = {
-            'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
-            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
-            'Audio': ['mp3', 'wav', 'ogg', 'flac'],
-            'Videos': ['mp4', 'avi', 'mkv', 'mov']
-        }
+        file_categories = self._config.get("file_categories", {})
 
         for root, _, files in os.walk(directory):
             for filename in files:
@@ -98,7 +103,7 @@ class SyncFileOrganizer(FileOrganizer):
 
                 base_folder = self.create_folder(directory, category_folder)
                 new_path = os.path.join(base_folder, filename)
-                if category_folder == 'Documents':
+                if category_folder in file_categories and file_extension in file_categories[category_folder]:
                     extension_folder = self.create_folder(base_folder, file_extension.upper())
                     new_path = os.path.join(extension_folder, filename)
 
@@ -194,6 +199,51 @@ def search_files(directory: str, query: str) -> List[str]:
     ]
 
 
+class SettingsPanel(QWidget):
+    def __init__(self, config: Dict[str, List[str]], config_manager: ConfigManager, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.config_manager = config_manager
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # File Categories Section
+        categories_group = QGroupBox("File Categories")
+        categories_layout = QVBoxLayout()
+        self.categories_list = QListWidget()
+        self.categories_list.addItems(self.config.get('file_categories', {}).keys())
+        categories_layout.addWidget(self.categories_list)
+
+        category_form = QFormLayout()
+        self.category_name_input = QLineEdit()
+        self.category_ext_input = QLineEdit()
+        category_form.addRow(QLabel("Category Name:"), self.category_name_input)
+        category_form.addRow(QLabel("Extensions (comma-separated):"), self.category_ext_input)
+
+        categories_layout.addLayout(category_form)
+        self.add_category_button = QPushButton("Add/Update Category")
+        self.add_category_button.clicked.connect(self.add_update_category)
+        categories_layout.addWidget(self.add_category_button)
+
+        categories_group.setLayout(categories_layout)
+        layout.addWidget(categories_group)
+
+    def add_update_category(self):
+        category_name = self.category_name_input.text().strip()
+        extensions = [ext.strip() for ext in self.category_ext_input.text().split(',') if ext.strip()]
+
+        if category_name and extensions:
+            self.config['file_categories'][category_name] = extensions
+            self.config_manager.save_config(self.config)
+            self.categories_list.clear()
+            self.categories_list.addItems(self.config['file_categories'].keys())
+            QMessageBox.information(self, "Settings", f"Category '{category_name}' updated with extensions: {', '.join(extensions)}.")
+        else:
+            QMessageBox.warning(self, "Settings", "Both category name and extensions are required.")
+
+
 class FileOrganizerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -210,32 +260,51 @@ class FileOrganizerGUI(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("File Organizer GUI")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 700)
+        self.setWindowIcon(QIcon('icon.png'))  # Add a custom icon if available
 
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
+        
+        # Main layout with splitter
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Use a QGridLayout for button layout
-        self.layout = QVBoxLayout(self.central_widget)
-        self.grid_layout = QGridLayout()
-        self.layout.addLayout(self.grid_layout)
+        # Tree and Actions Panel
+        self.tree_and_actions = QWidget()
+        self.tree_and_actions_layout = QVBoxLayout(self.tree_and_actions)
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Name", "Type", "Size"])
-        self.layout.addWidget(self.tree)
+        self.tree.setColumnWidth(0, 250)  # Adjust the first column width
+        self.tree_and_actions_layout.addWidget(self.tree)
 
-        self.add_buttons()
+        self.add_buttons_panel()
+        self.splitter.addWidget(self.tree_and_actions)
 
-    def add_buttons(self):
-        self.add_button("Open Directory", self.grid_layout, 0, 0, lambda: asyncio.run(self.open_directory()))
-        self.add_button("Organize Files", self.grid_layout, 0, 1, lambda: asyncio.run(self.on_organize()))
-        self.add_button("Restore Files", self.grid_layout, 1, 0, lambda: asyncio.run(self.on_restore()))
-        self.add_button("Stats", self.grid_layout, 1, 1, self.on_stats)
-        self.add_button("Search", self.grid_layout, 2, 0, self.on_search)
-        self.add_button("Blacklist", self.grid_layout, 2, 1, self.on_blacklist)
-        self.add_button("Show Blacklist", self.grid_layout, 3, 0, self.on_show_blacklist)
-        self.add_button("Reset to Default", self.grid_layout, 3, 1, self.reset_to_default)
-        self.add_button("Exit", self.grid_layout, 4, 0, self.close, colspan=2)
+        # Settings Panel
+        self.settings_panel = SettingsPanel(self.config, self.config_manager)
+        self.splitter.addWidget(self.settings_panel)
+
+        # Set initial sizes for splitter panels
+        self.splitter.setSizes([700, 300])
+        self.main_layout.addWidget(self.splitter)
+
+    def add_buttons_panel(self):
+        self.buttons_widget = QWidget()
+        self.buttons_layout = QGridLayout(self.buttons_widget)
+
+        self.add_button("Open Directory", self.buttons_layout, 0, 0, lambda: asyncio.run(self.open_directory()))
+        self.add_button("Organize Files", self.buttons_layout, 0, 1, lambda: asyncio.run(self.on_organize()))
+        self.add_button("Restore Files", self.buttons_layout, 1, 0, lambda: asyncio.run(self.on_restore()))
+        self.add_button("Stats", self.buttons_layout, 1, 1, self.on_stats)
+        self.add_button("Search", self.buttons_layout, 2, 0, self.on_search)
+        self.add_button("Blacklist", self.buttons_layout, 2, 1, self.on_blacklist)
+        self.add_button("Show Blacklist", self.buttons_layout, 3, 0, self.on_show_blacklist)
+        self.add_button("Reset to Default", self.buttons_layout, 3, 1, self.reset_to_default)
+        self.add_button("Exit", self.buttons_layout, 4, 0, self.close, colspan=2)
+
+        self.tree_and_actions_layout.addWidget(self.buttons_widget)
 
     def add_button(self, text, layout, row, col, callback, colspan=1):
         button = QPushButton(text)
