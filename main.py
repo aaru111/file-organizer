@@ -8,9 +8,9 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog,
     QGridLayout, QSplitter, QLineEdit, QLabel, QListWidget, QGroupBox,
-    QFormLayout, QTabWidget, QHBoxLayout, QComboBox
+    QFormLayout, QTabWidget, QHBoxLayout, QComboBox, QDialog, QPlainTextEdit
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
 
 
@@ -137,7 +137,8 @@ def update_tree(tree: QTreeWidget, directory: str) -> None:
         item_path = os.path.join(directory, item)
         size = os.path.getsize(item_path) if os.path.isfile(item_path) else ""
         item_type = "File" if os.path.isfile(item_path) else "Directory"
-        QTreeWidgetItem(tree, [item, item_type, f"{size} bytes"])
+        item_widget = QTreeWidgetItem(tree, [item, item_type, f"{size} bytes"])
+        item_widget.setData(0, Qt.ItemDataRole.UserRole, item_path)
 
 
 class BlacklistHandler:
@@ -208,7 +209,7 @@ class SettingsPanel(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        
+
         # File Categories Section
         categories_group = QGroupBox("File Categories")
         categories_layout = QVBoxLayout()
@@ -225,7 +226,10 @@ class SettingsPanel(QWidget):
         categories_layout.addLayout(category_form)
         self.add_category_button = QPushButton("Add/Update Category")
         self.add_category_button.clicked.connect(self.add_update_category)
+        self.rename_folder_button = QPushButton("Rename Folder")
+        self.rename_folder_button.clicked.connect(self.rename_folder)
         categories_layout.addWidget(self.add_category_button)
+        categories_layout.addWidget(self.rename_folder_button)
 
         categories_group.setLayout(categories_layout)
         layout.addWidget(categories_group)
@@ -235,6 +239,13 @@ class SettingsPanel(QWidget):
         extensions = [ext.strip() for ext in self.category_ext_input.text().split(',') if ext.strip()]
 
         if category_name and extensions:
+            existing_extensions = {ext for exts in self.config['file_categories'].values() for ext in exts}
+            duplicate_extensions = [ext for ext in extensions if ext in existing_extensions]
+
+            if duplicate_extensions:
+                QMessageBox.warning(self, "Settings", f"Extensions already exist: {', '.join(duplicate_extensions)}.")
+                return
+
             self.config['file_categories'][category_name] = extensions
             self.config_manager.save_config(self.config)
             self.categories_list.clear()
@@ -242,6 +253,41 @@ class SettingsPanel(QWidget):
             QMessageBox.information(self, "Settings", f"Category '{category_name}' updated with extensions: {', '.join(extensions)}.")
         else:
             QMessageBox.warning(self, "Settings", "Both category name and extensions are required.")
+
+    def rename_folder(self):
+        selected_category = self.categories_list.currentItem()
+        if selected_category:
+            current_name = selected_category.text()
+            new_name, ok = QInputDialog.getText(self, "Rename Folder", f"Enter new name for '{current_name}':")
+            if ok and new_name:
+                if new_name in self.config['file_categories']:
+                    QMessageBox.warning(self, "Rename Folder", "A folder with this name already exists.")
+                else:
+                    self.config['file_categories'][new_name] = self.config['file_categories'].pop(current_name)
+                    self.config_manager.save_config(self.config)
+                    self.categories_list.clear()
+                    self.categories_list.addItems(self.config['file_categories'].keys())
+                    QMessageBox.information(self, "Rename Folder", f"Folder renamed to '{new_name}'.")
+
+
+class FileContentDialog(QDialog):
+    def __init__(self, path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Contents of {os.path.basename(path)}")
+        self.resize(800, 600)
+        layout = QVBoxLayout(self)
+        self.text_edit = QPlainTextEdit(self)
+        self.text_edit.setReadOnly(True)
+        layout.addWidget(self.text_edit)
+        self.load_content(path)
+
+    def load_content(self, path):
+        if os.path.isdir(path):
+            contents = "\n".join(os.listdir(path))
+        else:
+            with open(path, 'r', errors='ignore') as f:
+                contents = f.read()
+        self.text_edit.setPlainText(contents)
 
 
 class FileOrganizerGUI(QMainWindow):
@@ -260,12 +306,12 @@ class FileOrganizerGUI(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("File Organizer GUI")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setGeometry(100, 100, 1200, 800)
         self.setWindowIcon(QIcon('icon.png'))  # Add a custom icon if available
 
         self.central_widget = QWidget(self)
         self.setCentralWidget(self.central_widget)
-        
+
         # Main layout with splitter
         self.main_layout = QHBoxLayout(self.central_widget)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -277,17 +323,24 @@ class FileOrganizerGUI(QMainWindow):
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Name", "Type", "Size"])
         self.tree.setColumnWidth(0, 250)  # Adjust the first column width
+        self.tree.itemDoubleClicked.connect(self.view_item_content)
         self.tree_and_actions_layout.addWidget(self.tree)
 
         self.add_buttons_panel()
         self.splitter.addWidget(self.tree_and_actions)
 
-        # Settings Panel
+        # Settings Panel with retractable feature
         self.settings_panel = SettingsPanel(self.config, self.config_manager)
-        self.splitter.addWidget(self.settings_panel)
+        self.settings_widget = QWidget()
+        self.settings_layout = QVBoxLayout(self.settings_widget)
+        self.settings_toggle_button = QPushButton("Toggle Settings Panel")
+        self.settings_toggle_button.clicked.connect(self.toggle_settings_panel)
+        self.settings_layout.addWidget(self.settings_toggle_button)
+        self.settings_layout.addWidget(self.settings_panel)
+        self.splitter.addWidget(self.settings_widget)
 
         # Set initial sizes for splitter panels
-        self.splitter.setSizes([700, 300])
+        self.splitter.setSizes([900, 300])
         self.main_layout.addWidget(self.splitter)
 
     def add_buttons_panel(self):
@@ -310,6 +363,12 @@ class FileOrganizerGUI(QMainWindow):
         button = QPushButton(text)
         layout.addWidget(button, row, col, 1, colspan)
         button.clicked.connect(callback)
+
+    def toggle_settings_panel(self):
+        if self.settings_panel.isVisible():
+            self.settings_panel.hide()
+        else:
+            self.settings_panel.show()
 
     async def open_directory(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Select Directory", self.current_directory)
@@ -355,10 +414,26 @@ class FileOrganizerGUI(QMainWindow):
 
     def reset_to_default(self) -> None:
         self.blacklist_handler.reset_to_default()
+        self.config['file_categories'] = {
+            'Documents': ['txt', 'doc', 'docx', 'pdf', 'rtf', 'odt'],
+            'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
+            'Audio': ['mp3', 'wav', 'ogg', 'flac'],
+            'Videos': ['mp4', 'avi', 'mkv', 'mov'],
+            'Python': ['py']
+        }
+        self.config_manager.save_config(self.config)
         QMessageBox.information(self, "Reset", "Configuration has been reset to default.")
+        self.settings_panel.categories_list.clear()
+        self.settings_panel.categories_list.addItems(self.config['file_categories'].keys())
 
     def on_show_blacklist(self) -> None:
         self.blacklist_handler.show_blacklist()
+
+    def view_item_content(self, item: QTreeWidgetItem, column: int):
+        path = item.data(0, Qt.ItemDataRole.UserRole)
+        if path:
+            dialog = FileContentDialog(path, self)
+            dialog.exec()
 
 
 def main():
