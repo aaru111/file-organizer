@@ -11,7 +11,39 @@ from PyQt6.QtWidgets import (
     QFormLayout, QTabWidget, QHBoxLayout, QComboBox, QDialog, QPlainTextEdit
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QFont, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor
+
+# Define syntax highlighter classes for different file types
+class PythonHighlighter(QSyntaxHighlighter):
+    def __init__(self, document):
+        super().__init__(document)
+        self.highlight_rules = []
+
+        # Keywords
+        keyword_format = QTextCharFormat()
+        keyword_format.setForeground(QColor("#ff5500"))
+        keywords = ["def", "class", "if", "elif", "else", "try", "except", "finally", "for", "while", "return", "import", "from", "as", "with", "self"]
+        self.highlight_rules += [(f"\\b{word}\\b", keyword_format) for word in keywords]
+
+        # Strings
+        string_format = QTextCharFormat()
+        string_format.setForeground(QColor("#ff00ff"))
+        self.highlight_rules.append(("\".*\"", string_format))
+        self.highlight_rules.append(("'.*'", string_format))
+
+        # Comments
+        comment_format = QTextCharFormat()
+        comment_format.setForeground(QColor("#008800"))
+        self.highlight_rules.append(("#[^\n]*", comment_format))
+
+    def highlightBlock(self, text):
+        for pattern, format in self.highlight_rules:
+            expression = QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
 
 
 class ConfigManager:
@@ -34,7 +66,9 @@ class ConfigManager:
                     'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
                     'Audio': ['mp3', 'wav', 'ogg', 'flac'],
                     'Videos': ['mp4', 'avi', 'mkv', 'mov'],
-                    'Python': ['py']
+                    'Python': ['py'],
+                    'JavaScript': ['js'],
+                    'HTML': ['html', 'htm']
                 }
             }
             self.save_config(default_config)
@@ -288,6 +322,12 @@ class FileContentDialog(QDialog):
             with open(path, 'r', errors='ignore') as f:
                 contents = f.read()
         self.text_edit.setPlainText(contents)
+
+    def highlight_content(self, path):
+        ext = os.path.splitext(path)[1].lower()
+        if ext == '.py':
+            PythonHighlighter(self.text_edit.document())
+        # Add other highlighters for other languages
 
 
 class FileOrganizerGUI(QMainWindow):
