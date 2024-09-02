@@ -24,8 +24,9 @@
    ```
 
 2. Install the required dependencies:
+   [Requirements](requirements.txt)
    ```bash
-   pip install PyQt6
+   pip install -r requirements.txt
    ```
 
 ## 🎮 Usage
