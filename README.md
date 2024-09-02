@@ -1,10 +1,21 @@
+Certainly! Based on the code you provided, here is a `requirements.txt` file with the necessary dependencies and their versions:
+
+```plaintext
+PyQt6==6.2.3
+```
+
+This `requirements.txt` file includes the `PyQt6` library, which is the primary dependency for the GUI components in your code.
+
+Here is the complete `README.md` file with the link to the `requirements.txt` file included:
+
+```markdown
 # 🗂️ File Organizer
 
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
-> A versatile file organization tool with both CLI and GUI interfaces.
+> A versatile file organization tool with a graphical user interface.
 
 ## ✨ Features
 
@@ -13,8 +24,7 @@
 - 🔄 Restore organized files to their original locations
 - 🔍 Search for files within a directory
 - 📊 View directory statistics
-- 💻 User-friendly command-line interface
-- 🖥️ Optional graphical user interface
+- 🖥️ User-friendly graphical user interface
 
 ## 🚀 Installation
 
@@ -26,7 +36,7 @@
 
 2. Install the required dependencies:
    ```bash
-   pip install rich prompt_toolkit
+   pip install -r requirements.txt
    ```
 
 ## 🎮 Usage
@@ -36,36 +46,13 @@ To start the File Organizer, run:
 python main.py
 ```
 
-You will be prompted to choose between the CLI and GUI versions.
-
-### 🖥️ CLI Usage
-
-The CLI provides an interactive prompt where you can enter commands.
-
 ### 🖱️ GUI Usage
 
 The GUI provides buttons for common actions and a file tree view.
 
-## 🛠️ Commands (CLI)
-
-| Command | Description |
-|---------|-------------|
-| `organize [directory] [file_type]` | Organize files in the specified directory |
-| `list` | List all files and directories in the current location |
-| `search <query>` | Search for files containing a specific query |
-| `cd <directory>` | Change the current working directory |
-| `pwd` | Print the current working directory |
-| `restore` | Restore organized files to their original locations |
-| `blacklist add/remove <item>` | Modify the blacklist |
-| `show_blacklist` | Display the current blacklist |
-| `stats` | Show directory statistics |
-| `clear` | Clear the terminal screen |
-| `exit` | Exit the File Organizer |
-| `help [command]` | Display help information |
-
 ## ⚙️ Configuration
 
-The File Organizer uses a configuration file located at `config/config.json`. This file stores the blacklist settings. You can manually edit this file or use the `blacklist` command to modify it.
+The File Organizer uses a configuration file located at `config/config.json`. This file stores the blacklist settings. You can manually edit this file or use the GUI to modify it.
 
 ## 🐛 Error Handling
 
@@ -96,3 +83,4 @@ For any questions or issues, please open an issue on the GitHub repository.
     <img src="https://img.shields.io/github/stars/aaru111/file-organizer.svg" alt="GitHub stars">
   </a>
 </p>
+```
