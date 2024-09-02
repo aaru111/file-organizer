@@ -4,15 +4,15 @@ import shutil
 import asyncio
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict, Optional
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton,
     QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox, QInputDialog,
     QGridLayout, QSplitter, QLineEdit, QLabel, QListWidget, QGroupBox,
     QFormLayout, QTabWidget, QHBoxLayout, QComboBox, QDialog, QPlainTextEdit
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QFont, QTextCursor
-from PyQt6.QtGui import QPixmap
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon, QFont, QTextCursor
+from PyQt5.QtGui import QPixmap
 
 
 
