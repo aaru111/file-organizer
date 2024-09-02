@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from tkinter import Tk, filedialog, messagebox, simpledialog, Toplevel, Text, Scrollbar, RIGHT, Y, END, Button as TkButton
 from tkinter.ttk import Frame, Button, Treeview, Style
 from treelib import Tree
-from modules.error_handler import error_handler
 
 
 class ConfigManager:
