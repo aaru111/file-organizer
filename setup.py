@@ -9,12 +9,10 @@ setup(
     long_description=open('README.md').read(),  
     long_description_content_type='text/markdown',
     url='https://github.com/aaru111/file-organizer.git', 
-    packages=find_packages(include=['modules', 'modules.*']),
+    packages=find_packages(), 
     include_package_data=True,
     install_requires=[
-        'prompt-toolkit==3.0.38',
-        'colorama==0.4.6',
-        'rich'
+        'PyQt6==6.4.0', 
     ],
     classifiers=[
         'Programming Language :: Python :: 3.7',
