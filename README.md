@@ -1,4 +1,3 @@
-```markdown
 # 🗂️ File Organizer
 
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/downloads/)
@@ -94,4 +93,4 @@ For any questions or issues, please open an issue on the GitHub repository.
     <img src="https://img.shields.io/github/stars/aaru111/file-organizer.svg" alt="GitHub stars">
   </a>
 </p>
-```
+
